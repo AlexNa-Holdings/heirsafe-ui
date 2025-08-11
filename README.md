@@ -1,3 +1,4 @@
+
 # HeirSafe UI
 
 A minimal, professional web UI for the **HeirSafe** Safe module.
@@ -51,3 +52,103 @@ pnpm dev            # or: yarn dev / npm run dev
 # build / preview
 pnpm build
 pnpm preview
+````
+
+---
+
+## Configuration
+
+Create `.env.local`:
+
+```ini
+# Optional: pre-fill the Safe address input
+VITE_DEFAULT_SAFE=0xYourSafeAddress
+
+# Required: 32-byte salt to deterministically predict the module address
+# Must be 0x + 64 hex characters
+VITE_INSTALL_SALT=0x0000000000000000000000000000000000000000000000000000000000000000
+```
+
+> The factory address per chain is configured in code at `src/config/chains.ts`.
+
+---
+
+## How It Works (high level)
+
+* **Predict**: compute the deterministic module address from `factory + safe + salt`.
+* **Check**: read code at the predicted address; inspect Safe’s enabled modules.
+* **Enable**:
+
+  * If `threshold === 1` and you are an owner, the app builds and sends the enable tx to your wallet.
+  * Otherwise, it shows Safe UI instructions and a shortcut button.
+* **Owners table**:
+
+  * Reads Safe owners.
+  * Reads `heirConfigs(owner)` (beneficiary, activationTime) from the module.
+  * Inline actions sign with your **EOA** (outside Safe App embedding).
+
+---
+
+## Screenshots
+
+Add images under `docs/images/` and link them here:
+
+```
+![Owners & heirs](docs/images/owners-table.png)
+![Enable module](docs/images/enable-module.png)
+```
+
+---
+
+## Development Notes
+
+* **Tailwind CSS (PostCSS)**
+  If you see: “It looks like you're trying to use `tailwindcss` directly as a PostCSS plugin…”, install and configure:
+
+  ```bash
+  pnpm add -D @tailwindcss/postcss
+  ```
+
+  And ensure your PostCSS config uses `@tailwindcss/postcss`.
+
+* **Accessibility**
+  Background animations respect `prefers-reduced-motion`.
+
+---
+
+## Troubleshooting
+
+* **“Factory not configured for chain X”**
+  Add/update the factory address in `src/config/chains.ts`.
+
+* **“Factory not deployed on this network”**
+  The configured factory address has no bytecode on the active chain—fix the address or switch networks.
+
+* **Enable flow didn’t auto-send**
+  Auto-send only when **threshold = 1** and your connected wallet is a Safe owner; otherwise follow the provided Safe UI steps.
+
+---
+
+## Contributing
+
+PRs welcome! Please keep changes focused and consistent with the existing style (TypeScript, Tailwind). If you add networks, update `src/config/chains.ts` carefully.
+
+---
+
+## License
+
+**GNU General Public License v3.0** — see [LICENSE](./LICENSE).
+
+---
+
+## Author
+
+**Written by [Alex Na](https://x.com/AlexNa)**
+
+* Module: [https://github.com/AlexNa-Holdings/heirsafe-module](https://github.com/AlexNa-Holdings/heirsafe-module)
+* UI: [https://github.com/AlexNa-Holdings/heirsafe-ui](https://github.com/AlexNa-Holdings/heirsafe-ui)
+
+*(Optional) Built with assistance from GPT-5 Thinking.*
+
+```
+::contentReference[oaicite:0]{index=0}
