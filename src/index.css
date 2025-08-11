@@ -1,5 +1,26 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
+/* Global */
 html, body, #root { height: 100%; }
+body { @apply bg-neutral-950 text-neutral-100 antialiased; }
+
+/* Reusable cards/buttons/table */
+.card { @apply p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800; }
+
+.btn { @apply px-3 py-2 rounded disabled:opacity-50; }
+.btn-primary   { @apply bg-emerald-700 hover:bg-emerald-600; }
+.btn-secondary { @apply bg-neutral-800 hover:bg-neutral-700; }
+.btn-info      { @apply bg-sky-700 hover:bg-sky-600; }
+.btn-danger    { @apply bg-rose-700 hover:bg-rose-600; }
+
+.table { @apply min-w-full text-sm; }
+.table thead th { @apply py-2 pr-4 font-medium text-neutral-300; }
+.table tbody td { @apply py-2 pr-4; }
+.table tr { @apply border-t border-neutral-800/70; }
+
+input[type="text"],
+input[type="datetime-local"] { @apply px-3 py-2 rounded bg-neutral-800; }
+
+/* Small code/kbd styling if you show hashes/addresses */
+code { @apply px-1.5 py-0.5 rounded bg-neutral-800/80 text-neutral-200; }
+

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ethers } from "ethers";
 import { useSafeApp } from "../lib/safeApp";
 
+
 type Props = {
   safeAddr: string;
   factoryAddr: string;
@@ -28,7 +29,9 @@ export default function InstallModule({
   const saltHex =
     (import.meta.env.VITE_INSTALL_SALT as string) || "0x" + "00".repeat(32);
 
-  // ---------------- SAFE APP paths (inside app.safe.global iframe) ----------------
+  const safeUrl = `https://app.safe.global/home?safe=${safeAddr}`;
+
+  // ---------------- SAFE APP (iframe) ----------------
 
   async function installInsideSafe() {
     if (!sdk) return;
@@ -78,7 +81,7 @@ export default function InstallModule({
     }
   }
 
-  // ---------------- STANDALONE paths (normal website, EOA connected) ----------------
+  // ---------------- STANDALONE (normal website) ----------------
 
   async function deployStandalone() {
     setBusy(true);
@@ -103,12 +106,11 @@ export default function InstallModule({
   }
 
   function openSafe() {
-    window.open(`https://app.safe.global/home?safe=${safeAddr}`, "_blank");
+    window.open(safeUrl, "_blank", "noopener,noreferrer");
   }
 
-  // Enable in Standalone:
-  // If threshold==1 and signer is an owner -> build & execute Safe tx directly.
-  // Otherwise show instructions (with link to open Safe UI).
+  // If threshold==1 and signer is an owner -> execute directly with pre-validated signature (no “Sign Text”).
+  // Else -> show instructions (and keep Open Safe UI button visible).
   async function enableStandaloneSmart() {
     try {
       setInstructions("");
@@ -118,13 +120,11 @@ export default function InstallModule({
       const signer = await browser.getSigner();
       const signerAddr = (await signer.getAddress()).toLowerCase();
 
-      // Minimal Safe ABI we need
       const SAFE_ABI = [
         "function getOwners() view returns (address[])",
         "function getThreshold() view returns (uint256)",
         "function nonce() view returns (uint256)",
-        "function getTransactionHash(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 _nonce) view returns (bytes32)",
-        "function execTransaction(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,bytes signatures) returns (bool)",
+        "function execTransaction(address,uint256,bytes,uint8,uint256,uint256,uint256,address,address,bytes) returns (bool)",
       ];
       const safe = new ethers.Contract(safeAddr, SAFE_ABI, signer);
 
@@ -132,51 +132,26 @@ export default function InstallModule({
         safe.getOwners(),
         safe.getThreshold(),
       ]);
-      const ownersLc = owners.map((o: string) => o.toLowerCase());
-      const isOwner = ownersLc.includes(signerAddr);
+      const isOwner = owners.map((o: string) => o.toLowerCase()).includes(signerAddr);
       const threshold = BigInt(thresholdBn.toString());
 
       if (threshold === 1n && isOwner) {
-        // Build inner call data: Safe.enableModule(predictedModule)
-        const MM_IFACE = new ethers.Interface([
-          "function enableModule(address)",
-        ]);
+        const MM_IFACE = new ethers.Interface(["function enableModule(address)"]);
         const to = safeAddr;
         const value = 0;
-        const data = MM_IFACE.encodeFunctionData("enableModule", [
-          predictedModule,
-        ]);
+        const data = MM_IFACE.encodeFunctionData("enableModule", [predictedModule]);
         const operation = 0; // CALL
         const safeTxGas = 0;
         const baseGas = 0;
         const gasPrice = 0;
         const gasToken = ethers.ZeroAddress;
         const refundReceiver = ethers.ZeroAddress;
-        const nonce = await safe.nonce();
 
-        // Get tx hash and sign
-        const txHash: string = await safe.getTransactionHash(
-          to,
-          value,
-          data,
-          operation,
-          safeTxGas,
-          baseGas,
-          gasPrice,
-          gasToken,
-          refundReceiver,
-          nonce
-        );
-
-        // Sign the hash (eth_sign/personal_sign over bytes32)
-        const sigHex = await signer.signMessage(ethers.getBytes(txHash));
-        const sigObj = ethers.Signature.from(sigHex);
-        // Pack as r(32) + s(32) + v(1) expected by Safe
-        const packedSig = ethers.concat([
-          sigObj.r,
-          sigObj.s,
-          ethers.toBeHex(sigObj.v, 1),
-        ]);
+        // Pre-validated signature: r(owner) || s(0) || v(1)
+        const rOwner = ethers.zeroPadValue(await signer.getAddress(), 32);
+        const sZero = ethers.ZeroHash;
+        const vOne = ethers.toBeHex(1, 1);
+        const preValidatedSig = ethers.concat([rOwner, sZero, vOne]);
 
         const tx = await safe.execTransaction(
           to,
@@ -188,14 +163,14 @@ export default function InstallModule({
           gasPrice,
           gasToken,
           refundReceiver,
-          packedSig
+          preValidatedSig
         );
         await tx.wait();
         await Promise.resolve(onChanged?.());
         return;
       }
 
-      // Fallback: show instructions
+      // Multisig or non-owner: show instructions (and keep the Open Safe UI button)
       setInstructions(
         [
           "Enable requires a Safe transaction:",
@@ -205,6 +180,7 @@ export default function InstallModule({
           "4) Function: enableModule(address)",
           `5) Parameter: ${predictedModule}`,
           "6) Review and submit. Collect required owner signatures.",
+          "",
         ].join("\n")
       );
     } catch (e: any) {
@@ -250,6 +226,7 @@ export default function InstallModule({
               {busy ? "Deploying…" : "Deploy module instance"}
             </button>
           )}
+
           {isDeployed && !isEnabled && (
             <>
               <button
@@ -259,19 +236,22 @@ export default function InstallModule({
               >
                 {busy ? "Working…" : "Enable module"}
               </button>
+
+              {/* Keep Open Safe visible even when instructions are shown */}
+              <div className="flex gap-2 items-center">
+                <button
+                  className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700"
+                  onClick={openSafe}
+                  title="Open your Safe to enable from the UI."
+                >
+                  Open Safe UI
+                </button>
+              </div>
+
               {!!instructions && (
                 <pre className="whitespace-pre-wrap text-amber-200/90 bg-amber-900/30 p-2 rounded">
                   {instructions}
                 </pre>
-              )}
-              {!instructions && (
-                <button
-                  className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700"
-                  onClick={openSafe}
-                  title="Open your Safe if you prefer to enable from the UI."
-                >
-                  Open Safe UI
-                </button>
               )}
             </>
           )}
