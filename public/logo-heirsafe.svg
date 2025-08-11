@@ -1,4 +1,4 @@
-<!-- Favicon (bigger, centered heart) -->
+<!-- Heart-on-shield logo (bigger, centered heart) -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
     <linearGradient id="hs-g" x1="0" y1="0" x2="1" y2="1">
@@ -8,11 +8,14 @@
   </defs>
 
   <!-- shield -->
-  <path d="M32 6l18 5v14c0 12-7.5 22.5-18 25.6C21.5 47.5 14 37 14 25V11l18-5z" fill="url(#hs-g)"/>
+  <path d="M32 4l20 6v16c0 13-8.3 24.6-20 28-11.7-3.4-20-15-20-28V10l20-6z" fill="url(#hs-g)"/>
+
+  <!-- subtle inner highlight -->
+  <path d="M12 25c0-5 0-9 0-15l20-6 20 6v5C38 16 26 18 18 22c-3 2-4 2-6 3z" fill="#ffffff" opacity=".08"/>
 
   <!-- heart: scale up around (32,32), then nudge up 4px -->
   <path
     transform="translate(0,-4) translate(32,32) scale(1.32) translate(-32,-32)"
-    d="M32 40s-7.5-4.5-7.5-10.2a4.2 4.2 0 0 1 7.5-2.5 4.2 4.2 0 0 1 7.5 2.5C39.5 35.5 32 40 32 40z"
-    fill="#0a0a0a" opacity=".9"/>
+    d="M32 42s-9-5.3-9-12a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 6.7-9 12-9 12z"
+    fill="#0a0a0a" opacity=".88"/>
 </svg>

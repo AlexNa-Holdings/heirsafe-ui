@@ -31,31 +31,6 @@ A minimal, professional web UI for the **HeirSafe** Safe module.
 
 ---
 
-## Quick Start
-
-```bash
-# clone
-git clone https://github.com/AlexNa-Holdings/heirsafe-ui.git
-cd heirsafe-ui
-
-# install
-pnpm install        # or: yarn install / npm install
-
-# configure environment
-cp .env.example .env.local
-# edit .env.local (see below)
-
-# run dev
-pnpm dev            # or: yarn dev / npm run dev
-# open http://localhost:5173
-
-# build / preview
-pnpm build
-pnpm preview
-````
-
----
-
 ## Configuration
 
 Create `.env.local`:
@@ -89,16 +64,6 @@ VITE_INSTALL_SALT=0x000000000000000000000000000000000000000000000000000000000000
 
 ---
 
-## Screenshots
-
-Add images under `docs/images/` and link them here:
-
-```
-![Owners & heirs](docs/images/owners-table.png)
-![Enable module](docs/images/enable-module.png)
-```
-
----
 
 ## Development Notes
 

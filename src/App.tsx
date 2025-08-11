@@ -19,7 +19,6 @@ import ModuleIntro from "./components/ModuleIntro";
 import BackgroundArt from "./components/BackgroundArt";
 import StatusBar from "./components/StatusBar";
 
-
 import {
   predictModuleForSafe,
   isDeployed as codeExists,
@@ -153,7 +152,7 @@ export default function App() {
       );
       setPredicted(addr);
       const hasCode = await codeExists(readProvider as any, addr);
-      setDeployed(hasCode);
+      setDeployed(Boolean(hasCode));
       const en = hasCode
         ? await checkEnabled(readProvider as any, safeAddr, addr)
         : false;
@@ -262,7 +261,11 @@ export default function App() {
 
   return (
     <div className="relative min-h-screen bg-neutral-950 text-neutral-100">
-      <BackgroundArt />
+      {/* Background: heart-on-shield */}
+      <div className="hs-backdrop" aria-hidden="true">
+        <img src="/logo-heirsafe.svg" alt="" className="hs-backdrop__logo" />
+        <div className="hs-noise" />
+      </div>
       <main className="relative z-10 max-w-5xl mx-auto p-6 space-y-6">
         <AppHeader safeAddr={safeAddr} />
         <ModuleIntro />
