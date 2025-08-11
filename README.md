@@ -1,69 +1,53 @@
-# React + TypeScript + Vite
+# HeirSafe UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A minimal, professional web UI for the **HeirSafe** Safe module.
 
-Currently, two official plugins are available:
+- 🧩 **HeirSafe Module**: lets each Safe owner set a **beneficiary** and an **activation time**. After that time, the beneficiary can **claim** and replace that owner’s address. No funds move; only the owner address changes.
+- 🔗 Module repo: https://github.com/AlexNa-Holdings/heirsafe-module  
+- 🔗 UI repo: https://github.com/AlexNa-Holdings/heirsafe-ui
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## Expanding the ESLint configuration
+## Features
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **Install / Enable Module**
+  - Predicts the module address from factory + salt
+  - Checks deployment & enablement
+  - If Safe threshold is **1** and you’re an owner, prepares and sends the **Enable Module** tx directly
+  - Otherwise shows clear, copy-ready steps and an “Open Safe UI” shortcut
+- **Owners & Heirs (inline)**
+  - Per owner: **set beneficiary + activation**, **prolong**, **remove**
+  - Local datetime picker → stored on-chain as **UTC seconds**
+  - Live **countdown** (Local + UTC + “ready in / since …”)
+  - If your connected address is a configured beneficiary and time has passed, you’ll see **Claim**
+- **Nice UX**
+  - Short, copyable addresses (`0x1234…abcd`) with tooltip and non-reflow “Copied” bubble
+  - Calm **Status** bar (info/warn/error/success)
+  - Remembers your last Safe (`localStorage`)
+  - Collapsible “What is the HeirSafe module?” intro (remembers state)
+  - Tasteful animated background/logo; respects `prefers-reduced-motion`
+  - Tailwind CSS styling
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+---
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+## Quick Start
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+```bash
+# clone
+git clone https://github.com/AlexNa-Holdings/heirsafe-ui.git
+cd heirsafe-ui
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+# install
+pnpm install        # or: yarn install / npm install
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+# configure environment
+cp .env.example .env.local
+# edit .env.local (see below)
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+# run dev
+pnpm dev            # or: yarn dev / npm run dev
+# open http://localhost:5173
+
+# build / preview
+pnpm build
+pnpm preview

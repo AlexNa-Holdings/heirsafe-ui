@@ -15,6 +15,11 @@ import { CHAINS, getFactoryAddress } from "./config/chains";
 import Address from "./components/Address";
 import AppHeader from "./components/AppHeader";
 import AppFooter from "./components/AppFooter";
+import ModuleIntro from "./components/ModuleIntro";
+import BackgroundArt from "./components/BackgroundArt";
+import StatusBar from "./components/StatusBar";
+
+
 import {
   predictModuleForSafe,
   isDeployed as codeExists,
@@ -164,7 +169,7 @@ export default function App() {
       setPredicted("");
       setDeployed(null);
       setEnabled(null);
-      setStatus(e?.message || String(e));
+      setStatus(`Error: ${e?.message || String(e)}`);
       console.error("refreshInstallState error:", e);
     }
   }
@@ -200,7 +205,7 @@ export default function App() {
       await tx.wait();
       setStatus("setBeneficiary confirmed");
     } catch (e: any) {
-      setStatus(e?.reason || e?.message || String(e));
+      setStatus(`Error: ${e?.reason || e?.message || String(e)}`);
     }
   }
 
@@ -223,7 +228,7 @@ export default function App() {
       await tx.wait();
       setStatus("setActivationTime confirmed");
     } catch (e: any) {
-      setStatus(e?.reason || e?.message || String(e));
+      setStatus(`Error: ${e?.reason || e?.message || String(e)}`);
     }
   }
 
@@ -251,14 +256,16 @@ export default function App() {
       setStatus("claimSafe confirmed");
       await refreshOwners();
     } catch (e: any) {
-      setStatus(e?.reason || e?.message || String(e));
+      setStatus(`Error: ${e?.reason || e?.message || String(e)}`);
     }
   }
 
   return (
-      <div className="min-h-screen bg-neutral-950 text-neutral-100">
-        <main className="max-w-5xl mx-auto p-6 space-y-6">
+    <div className="relative min-h-screen bg-neutral-950 text-neutral-100">
+      <BackgroundArt />
+      <main className="relative z-10 max-w-5xl mx-auto p-6 space-y-6">
         <AppHeader safeAddr={safeAddr} />
+        <ModuleIntro />
 
         {/* Configuration */}
         <section className="p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800 space-y-3">
@@ -339,7 +346,7 @@ export default function App() {
           chainId={chainId}
         />
 
-        <div className="text-sm text-amber-200">{status}</div>
+        <StatusBar text={status} />
       </main>
       <AppFooter showAiCredit={true} />
     </div>

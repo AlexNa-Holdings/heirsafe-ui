@@ -24,3 +24,36 @@ input[type="datetime-local"] { @apply px-3 py-2 rounded bg-neutral-800; }
 /* Small code/kbd styling if you show hashes/addresses */
 code { @apply px-1.5 py-0.5 rounded bg-neutral-800/80 text-neutral-200; }
 
+/* --- HeirSafe background animations --- */
+@keyframes hs-rotate-slow {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes hs-swing {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25%      { transform: rotate(-33deg) scale(1.5); }
+  50%      { transform: rotate(0deg) scale(1); }
+  75%      { transform: rotate(33deg) scale(1.5); }
+}
+
+@keyframes hs-pulse-slow {
+  0%,100% { transform: scale(0.80); }
+  50%     { transform: scale(2.0); }
+}
+@keyframes hs-float {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-6px); }
+}
+
+.hs-anim-rotate { animation: hs-rotate-slow 120s linear infinite; }
+.hs-anim-pulse  { animation: hs-pulse-slow 36s ease-in-out infinite; }
+.hs-anim-float  { animation: hs-float 14s ease-in-out infinite; }
+.hs-anim-swing { animation: hs-swing 126s ease-in-out infinite; }
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .hs-anim-rotate, .hs-anim-pulse, .hs-anim-float, .hs-anim-swing { animation: none !important; }
+}
+
+
