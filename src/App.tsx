@@ -1,24 +1,21 @@
+// src/App.tsx
 import { useEffect, useMemo, useState } from "react";
 import { ethers } from "ethers";
 import "./index.css";
 
 // UI
-import { ConnectButton } from "./components/ConnectButton";
 import InstallModule from "./components/InstallModule";
-
-// ABIs & helpers
-import { HeirSafeModuleABI } from "./abi/HeirSafeModule";
-import { useSafeApp } from "./lib/safeApp";
-import { getOwners, computePrevOwner } from "./lib/safeHelpers";
-import NetworkSwitcher from "./components/NetworkSwitcher";
-import { CHAINS, getFactoryAddress } from "./config/chains";
-import Address from "./components/Address";
 import AppHeader from "./components/AppHeader";
 import AppFooter from "./components/AppFooter";
 import ModuleIntro from "./components/ModuleIntro";
-import BackgroundArt from "./components/BackgroundArt";
 import StatusBar from "./components/StatusBar";
+import Address from "./components/Address";
+import OwnersView from "./components/OwnersView";
 
+// ABIs & helpers
+import { useSafeApp } from "./lib/safeApp";
+import { getOwners } from "./lib/safeHelpers";
+import { CHAINS, getFactoryAddress } from "./config/chains";
 import {
   predictModuleForSafe,
   isDeployed as codeExists,
@@ -33,71 +30,36 @@ export default function App() {
   // Safe App context (iframe)
   const { isSafeApp, safe, provider: safeEip1193 } = useSafeApp();
 
-  // build a read provider ONLY from in-page providers:
-  // 1) Safe App provider (always available when embedded)
-  // 2) injected wallet (after the user connects)
+  // in-page providers: Safe App provider (iframe) or injected wallet (EOA)
   const [injected, setInjected] = useState<ethers.BrowserProvider | null>(null);
   useEffect(() => {
     const eth = (window as any).ethereum;
     if (eth) setInjected(new ethers.BrowserProvider(eth));
   }, []);
-  // pick a default chain for public read (use the one you host on)
-  const DEFAULT_CHAIN_ID = 11155111; // Sepolia (adjust if needed)
-  const FALLBACK_RPC = CHAINS[DEFAULT_CHAIN_ID]?.rpcUrls?.[0];
 
+  // pick a default chain for public read (use the one you host on)
+  const DEFAULT_CHAIN_ID = 11155111; // Sepolia
+  const FALLBACK_RPC = CHAINS[DEFAULT_CHAIN_ID]?.addChainParams?.rpcUrls?.[0] || "";
+
+  // a read provider for *reads only*
   const readProvider = useMemo(() => {
     if (safeEip1193) return new ethers.BrowserProvider(safeEip1193 as any);
     if (injected) return injected;
-    // ✅ public read-only provider so tables/labels still load
-    if (FALLBACK_RPC)
-      return new ethers.JsonRpcProvider(FALLBACK_RPC, DEFAULT_CHAIN_ID);
-    return null;
+    return FALLBACK_RPC ? new ethers.JsonRpcProvider(FALLBACK_RPC) : null;
   }, [safeEip1193, injected]);
 
-  // Safe address (autofill if embedded)
+  // Safe address (prefill from env / localStorage / Safe App)
   const [safeAddr, setSafeAddr] = useState<string>(() => {
     try {
-      const fromLS = localStorage.getItem(LS_SAFE_KEY)?.trim() || "";
-      return (fromLS || DEFAULT_SAFE).trim();
+      return localStorage.getItem(LS_SAFE_KEY) ||
+        DEFAULT_SAFE ||
+        "";
     } catch {
-      return DEFAULT_SAFE;
+      return DEFAULT_SAFE || "";
     }
   });
 
-  // predicted module + state
-  const [predicted, setPredicted] = useState<string>("");
-  const [deployed, setDeployed] = useState<boolean | null>(null);
-  const [enabled, setEnabled] = useState<boolean | null>(null);
-  const [chainId, setChainId] = useState<number | null>(null);
-
-  // owners list + status messages
-  const [owners, setOwners] = useState<string[]>([]);
-  const [status, setStatus] = useState<string>("");
-
-  // owner actions (EOA)
-  const [beneficiary, setBeneficiary] = useState<string>("");
-  const [activation, setActivation] = useState<string>("");
-
-  // beneficiary claim
-  const [ownerForClaim, setOwnerForClaim] = useState<string>("");
-
-  // derive chainId from the active readProvider
-  useEffect(() => {
-    (async () => {
-      if (!readProvider) {
-        setChainId(null);
-        return;
-      }
-      const net = await (readProvider as any).getNetwork();
-      setChainId(Number(net.chainId));
-    })();
-  }, [readProvider]);
-
-  const factoryFromChain = chainId != null ? getFactoryAddress(chainId) : null;
-  const normalizedFactory = factoryFromChain?.trim() || null; // 👈 add this
-  const readyForChain = chainId !== null && !!normalizedFactory; // 👈 use this
-
-  // default Safe from Safe App context
+  // keep Safe App safe address in sync
   useEffect(() => {
     if (isSafeApp && safe?.safeAddress) {
       setSafeAddr(safe.safeAddress);
@@ -107,38 +69,77 @@ export default function App() {
     }
   }, [isSafeApp, safe]);
 
+  // persist last used safe
   useEffect(() => {
     try {
       if (ethers.isAddress(safeAddr)) {
-        localStorage.setItem(LS_SAFE_KEY, safeAddr);
+        localStorage.setItem(LS_SAFE_KEY, ethers.getAddress(safeAddr));
       }
     } catch {}
   }, [safeAddr]);
 
+  // network tracking
+  const [chainId, setChainId] = useState<number | null>(null);
+  useEffect(() => {
+    let cleanup = () => {};
+    (async () => {
+      if (!readProvider) {
+        setChainId(null);
+        return;
+      }
+      const net = await (readProvider as any).getNetwork();
+      setChainId(Number(net.chainId));
+
+      // listen to wallet chain changes (only on injected providers)
+      const eth = (window as any).ethereum;
+      if (eth && !safeEip1193) {
+        const handler = (cidHex: string) => {
+          try {
+            setChainId(parseInt(cidHex, 16));
+          } catch {}
+        };
+        eth.on?.("chainChanged", handler);
+        cleanup = () => eth.removeListener?.("chainChanged", handler);
+      }
+    })();
+    return cleanup;
+  }, [readProvider, safeEip1193]);
+
+  // factory & readiness for this chain
+  const factoryFromChain = chainId != null ? getFactoryAddress(chainId) : undefined;
+  const normalizedFactory =
+    factoryFromChain && ethers.isAddress(factoryFromChain)
+      ? ethers.getAddress(factoryFromChain)
+      : null;
+  const readyForChain = !!normalizedFactory;
+
+  // install state
+  const [predicted, setPredicted] = useState<string>("");
+  const [deployed, setDeployed] = useState<boolean | null>(null);
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [status, setStatus] = useState<string>("");
+
+  // owners (used for quick count; actual per-owner configs are in OwnersView)
+  const [owners, setOwners] = useState<string[]>([]);
+
   async function refreshOwners() {
-    if (!ethers.isAddress(safeAddr) || !readProvider) {
+    try {
+      if (!readProvider || !ethers.isAddress(safeAddr)) {
+        setOwners([]);
+        return;
+      }
+      const list = await getOwners(readProvider as any, safeAddr);
+      setOwners(list);
+    } catch {
       setOwners([]);
-      return;
     }
-    const list = await getOwners(readProvider as any, safeAddr);
-    setOwners(list);
   }
 
   async function refreshInstallState() {
-    setStatus("Checking module…");
-    if (!ethers.isAddress(safeAddr))
-      throw new Error("Enter a valid Safe address");
-    if (!readProvider)
-      throw new Error("Connect a wallet or open inside Safe to continue");
-    if (chainId == null) throw new Error("Unknown network");
-    if (!normalizedFactory || !ethers.isAddress(normalizedFactory)) {
-      throw new Error(`Factory not configured for chain ${chainId}`);
-    }
     try {
-      if (!ethers.isAddress(safeAddr))
-        throw new Error("Enter a valid Safe address");
-      if (!readProvider)
-        throw new Error("Connect a wallet or open inside Safe to continue");
+      if (!readProvider) throw new Error("No provider");
+      if (!ethers.isAddress(safeAddr)) throw new Error("Enter a valid Safe address");
+      if (!normalizedFactory) throw new Error("Factory not configured for this chain");
 
       const saltHex =
         (import.meta.env.VITE_INSTALL_SALT as string) || "0x" + "00".repeat(32);
@@ -158,12 +159,15 @@ export default function App() {
         saltHex
       );
       setPredicted(addr);
+
       const hasCode = await codeExists(readProvider as any, addr);
       setDeployed(Boolean(hasCode));
+
       const en = hasCode
         ? await checkEnabled(readProvider as any, safeAddr, addr)
         : false;
       setEnabled(en);
+
       setStatus(
         en
           ? "Module installed"
@@ -180,6 +184,7 @@ export default function App() {
     }
   }
 
+  // initial refresh & whenever deps change
   useEffect(() => {
     if (!readProvider || !readyForChain) return;
     (async () => {
@@ -189,135 +194,48 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [safeAddr, readProvider, readyForChain]);
 
-  // ---------------- owner actions (sign with injected wallet; disabled in Safe App) ----------------
-  async function doSetBeneficiary() {
-    try {
-      if (!ethers.isAddress(predicted)) throw new Error("Module not ready");
-      if (isSafeApp)
-        throw new Error("Open standalone site to sign with wallet");
-      if (!ethers.isAddress(beneficiary))
-        throw new Error("Invalid beneficiary");
-      const ts = Number(activation);
-      if (!ts || ts <= Math.floor(Date.now() / 1000))
-        throw new Error("Activation must be a future unix timestamp");
-
-      const eth = (window as any).ethereum;
-      if (!eth) throw new Error("No wallet detected");
-      const bp = new ethers.BrowserProvider(eth);
-      const signer = await bp.getSigner();
-      const mod = new ethers.Contract(predicted, HeirSafeModuleABI, signer);
-      const tx = await mod.setBeneficiary(beneficiary, ts);
-      setStatus("setBeneficiary sent…");
-      await tx.wait();
-      setStatus("setBeneficiary confirmed");
-    } catch (e: any) {
-      setStatus(`Error: ${e?.reason || e?.message || String(e)}`);
-    }
-  }
-
-  async function doSetTime() {
-    try {
-      if (!ethers.isAddress(predicted)) throw new Error("Module not ready");
-      if (isSafeApp)
-        throw new Error("Open standalone site to sign with wallet");
-      const ts = Number(activation);
-      if (!ts || ts <= Math.floor(Date.now() / 1000))
-        throw new Error("Activation must be a future unix timestamp");
-
-      const eth = (window as any).ethereum;
-      if (!eth) throw new Error("No wallet detected");
-      const bp = new ethers.BrowserProvider(eth);
-      const signer = await bp.getSigner();
-      const mod = new ethers.Contract(predicted, HeirSafeModuleABI, signer);
-      const tx = await mod.setActivationTime(ts);
-      setStatus("setActivationTime sent…");
-      await tx.wait();
-      setStatus("setActivationTime confirmed");
-    } catch (e: any) {
-      setStatus(`Error: ${e?.reason || e?.message || String(e)}`);
-    }
-  }
-
-  async function doClaim() {
-    try {
-      if (!ethers.isAddress(predicted)) throw new Error("Module not ready");
-      if (isSafeApp)
-        throw new Error("Open standalone site to sign with wallet");
-      if (!ethers.isAddress(ownerForClaim))
-        throw new Error("Invalid owner address");
-
-      const prev = await computePrevOwner(
-        readProvider as any,
-        safeAddr,
-        ownerForClaim
-      );
-      const eth = (window as any).ethereum;
-      if (!eth) throw new Error("No wallet detected");
-      const bp = new ethers.BrowserProvider(eth);
-      const signer = await bp.getSigner();
-      const mod = new ethers.Contract(predicted, HeirSafeModuleABI, signer);
-      const tx = await mod.claimSafe(ownerForClaim, prev);
-      setStatus("claimSafe sent…");
-      await tx.wait();
-      setStatus("claimSafe confirmed");
-      await refreshOwners();
-    } catch (e: any) {
-      setStatus(`Error: ${e?.reason || e?.message || String(e)}`);
-    }
-  }
-
   return (
-    <div className="relative min-h-screen bg-neutral-950 text-neutral-100">
-      {/* Background: heart-on-shield */}
+    <div className="relative min-h-screen text-neutral-100 bg-neutral-950">
+           {/* Background: heart-on-shield */}
       <div className="hs-backdrop" aria-hidden="true">
         <img src="/logo-heirsafe.svg" alt="" className="hs-backdrop__logo" />
         <div className="hs-noise" />
       </div>
-      <main className="relative z-10 max-w-5xl mx-auto p-6 space-y-6">
-        <AppHeader safeAddr={safeAddr} />
+      <AppHeader safeAddr={safeAddr} />
+
+      <main className="relative z-10 max-w-5xl mx-auto px-4 pt-6 pb-12 space-y-6">
         <ModuleIntro />
 
-        {/* Configuration */}
-        <section className="p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800 space-y-3">
-          <h2 className="font-medium">Configuration</h2>
-          <div className="grid gap-2 md:grid-cols-2">
+        {/* Configuration / prediction */}
+        <section className="rounded-2xl bg-neutral-900/70 border border-neutral-800 p-4 space-y-3" aria-labelledby="install-title">
+          <h2 id="install-title" className="font-semibold">Module & Install</h2>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
-              className="px-3 py-2 rounded bg-neutral-800"
-              placeholder="Safe address"
+              className="w-full sm:max-w-xl px-3 py-2 rounded bg-neutral-800"
+              placeholder="0x… Safe address"
               value={safeAddr}
-              onChange={(e) =>
-                setSafeAddr(e.target.value.trim().replace(/\s+/g, ""))
-              }
+              onChange={(e) => setSafeAddr(e.target.value.trim())}
             />
-          </div>
-          {!readProvider && (
-            <p className="text-xs opacity-70">
-              Connect a wallet (or open this app inside your Safe) to load
-              on-chain data.
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2 items-center">
             <button
-              onClick={async () => {
-                await refreshInstallState();
-                await refreshOwners();
-              }}
               className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700"
+              onClick={() => {
+                refreshInstallState();
+                refreshOwners();
+              }}
             >
               Refresh
             </button>
-            {enabled ? (
-              <span className="text-emerald-300 text-sm">
-                Module installed ✅
-              </span>
-            ) : deployed === false ? (
-              <span className="text-amber-300 text-sm">
-                Module not deployed
-              </span>
-            ) : enabled === false ? (
-              <span className="text-amber-300 text-sm">
-                Module deployed but not enabled
-              </span>
+          </div>
+
+          <div className="text-sm opacity-80">
+            {chainId != null && CHAINS[chainId] ? (
+              <span>Network: {CHAINS[chainId].name}</span>
+            ) : (
+              <span>Network: Unknown</span>
+            )}
+            {enabled === false ? (
+              <span className="ml-2 text-amber-300">· Module deployed but not enabled</span>
             ) : null}
           </div>
 
@@ -328,7 +246,7 @@ export default function App() {
             predicted && (
               <InstallModule
                 safeAddr={safeAddr}
-                factoryAddr={normalizedFactory!} // non-null because of the guard above
+                factoryAddr={normalizedFactory!}
                 predictedModule={predicted}
                 readProvider={readProvider as any}
                 isDeployed={Boolean(deployed)}
@@ -348,6 +266,7 @@ export default function App() {
           )}
         </section>
 
+        {/* Owners table */}
         <OwnersView
           key={`${safeAddr}:${predicted}:${chainId ?? "x"}`}
           safeAddr={safeAddr}
@@ -359,624 +278,8 @@ export default function App() {
 
         <StatusBar text={status} />
       </main>
+
       <AppFooter showAiCredit={true} />
     </div>
-  );
-}
-
-/** Owners & heirs table with inline editor and local datetime picker */
-/** Owners & heirs table with inline editor, countdown, and resilient loading */
-function OwnersView({
-  safeAddr,
-  moduleAddr,
-  readProvider,
-  enabled,
-  chainId,
-}: {
-  safeAddr: string;
-  moduleAddr: string;
-  readProvider: ethers.Provider | null;
-  enabled?: boolean;
-  chainId?: number | null;
-}) {
-  const { isSafeApp } = useSafeApp();
-
-  type Row = { owner: string; beneficiary: string; ts: bigint };
-  const [rows, setRows] = useState<Row[]>([]);
-  const [signerAddr, setSignerAddr] = useState<string>("");
-  const [busyByOwner, setBusyByOwner] = useState<Record<string, boolean>>({});
-  const [editing, setEditing] = useState<null | {
-    mode: "set" | "prolong";
-    owner: string;
-    beneficiary: string; // only for "set"
-    dtLocal: string; // YYYY-MM-DDTHH:mm
-  }>(null);
-
-  // ticks every second so the UI re-renders
-  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
-  useEffect(() => {
-    const id = setInterval(
-      () => setNowSec(Math.floor(Date.now() / 1000)),
-      1000
-    );
-    return () => clearInterval(id);
-  }, []);
-
-  // keep small offset = (chain latest block time) - (local time)
-  const [chainOffset, setChainOffset] = useState(0);
-  useEffect(() => {
-    if (!readProvider) return;
-    let stop = false;
-
-    const refresh = async () => {
-      try {
-        const latest = await (readProvider as any).getBlock("latest");
-        const chainTs = Number(
-          latest?.timestamp ?? Math.floor(Date.now() / 1000)
-        );
-        const localTs = Math.floor(Date.now() / 1000);
-        if (!stop) setChainOffset(chainTs - localTs);
-      } catch {
-        // ignore; we'll try again on next tick
-      }
-    };
-
-    refresh();
-    const id = setInterval(refresh, 30000); // refresh offset every 30s
-    return () => {
-      stop = true;
-      clearInterval(id);
-    };
-  }, [readProvider]);
-
-  // poll latest block time (every 5s)
-  useEffect(() => {
-    if (!readProvider) return;
-    let stop = false;
-
-    async function tick() {
-      try {
-        const b = await (readProvider as any).getBlock("latest");
-        if (!stop && b?.timestamp != null) {
-          setChainNow(Number(b.timestamp));
-        }
-      } catch {
-        // ignore transient RPC errors
-      }
-    }
-
-    tick();
-    const id = setInterval(tick, 5000);
-    return () => {
-      stop = true;
-      clearInterval(id);
-    };
-  }, [readProvider]);
-
-  // Helpers
-  const fmtUTC = (ts: bigint) =>
-    ts === 0n ? "—" : new Date(Number(ts) * 1000).toISOString();
-  const fmtLocal = (ts: bigint) =>
-    ts === 0n ? "—" : new Date(Number(ts) * 1000).toLocaleString();
-  const toLocalInputValue = (ts: bigint) => {
-    if (ts === 0n) return "";
-    const d = new Date(Number(ts) * 1000);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
-      d.getDate()
-    )}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
-  const localInputToUtcSeconds = (v: string) => {
-    const ms = Date.parse(v); // local time parsed as local
-    if (!Number.isFinite(ms)) throw new Error("Enter a valid date & time.");
-    return Math.floor(ms / 1000);
-  };
-
-  function fmtCountdown(ts: bigint, refSec: number) {
-    if (ts === 0n) return { label: "—", isFuture: true };
-    const target = Number(ts);
-    const diff = target - refSec; // seconds
-    const future = diff > 0;
-    let d = Math.abs(diff);
-    const days = Math.floor(d / 86400);
-    d -= days * 86400;
-    const hours = Math.floor(d / 3600);
-    d -= hours * 3600;
-    const mins = Math.floor(d / 60);
-    d -= mins * 60;
-    const secs = d;
-
-    const parts = [
-      days ? `${days}d` : null,
-      hours ? `${hours}h` : null,
-      mins ? `${mins}m` : null,
-      `${secs}s`,
-    ]
-      .filter(Boolean)
-      .join(" ");
-
-    return future
-      ? { label: `in ${parts}`, isFuture: true }
-      : { label: `ready (since ${parts})`, isFuture: false };
-  }
-
-  // Tick every second so countdown updates
-  useEffect(() => {
-    const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  // Capture connected EOA (for actions)
-  useEffect(() => {
-    (async () => {
-      try {
-        const eth = (window as any).ethereum;
-        if (!eth) return setSignerAddr("");
-        const bp = new ethers.BrowserProvider(eth);
-        const s = await bp.getSigner().catch(() => null);
-        setSignerAddr(s ? await s.getAddress() : "");
-      } catch {
-        setSignerAddr("");
-      }
-    })();
-  }, []);
-
-  // Load rows — owners first, enrich with module configs if code exists
-  async function loadRows() {
-    try {
-      if (!readProvider || !ethers.isAddress(safeAddr)) {
-        setRows([]);
-        return;
-      }
-
-      // 1) Always fetch owners first
-      const owners = await getOwners(readProvider as any, safeAddr);
-      let base: Row[] = owners.map((o) => ({
-        owner: o,
-        beneficiary: ethers.ZeroAddress,
-        ts: 0n,
-      }));
-
-      // 2) Only attempt heirConfigs if module address has code
-      let hasModuleCode = false;
-      if (ethers.isAddress(moduleAddr)) {
-        const code = await (readProvider as any).getCode(moduleAddr);
-        hasModuleCode = !!code && code !== "0x";
-      }
-
-      if (hasModuleCode) {
-        const mod = new ethers.Contract(
-          moduleAddr,
-          HeirSafeModuleABI,
-          readProvider as any
-        );
-        base = await Promise.all(
-          base.map(async (r) => {
-            try {
-              const cfg = await mod.heirConfigs(r.owner);
-              return {
-                owner: r.owner,
-                beneficiary: (cfg.beneficiary as string) || ethers.ZeroAddress,
-                ts: BigInt(cfg.activationTime),
-              };
-            } catch (e) {
-              console.debug("heirConfigs failed for", r.owner, e);
-              return r; // keep owner row even if this call fails
-            }
-          })
-        );
-      }
-
-      setRows(base);
-    } catch (err) {
-      console.error("[OwnersView] loadRows error:", err);
-      // Keep last good rows if something transient fails
-    }
-  }
-
-  // Fire load on mount and when deps change, plus poll every 30s
-  useEffect(() => {
-    console.log("[OwnersView] effect fired", {
-      safeAddr,
-      moduleAddr,
-      hasProvider: !!readProvider,
-    });
-    loadRows();
-    const t = setInterval(loadRows, 30000);
-    return () => clearInterval(t);
-  }, [safeAddr, moduleAddr, readProvider]);
-
-  const canWriteGlobally =
-    !!readProvider &&
-    ethers.isAddress(moduleAddr) &&
-    (enabled ?? true) &&
-    !isSafeApp;
-
-  // Actions
-  async function doSet(owner: string, beneficiary: string, whenLocal: string) {
-    try {
-      setBusyByOwner((m) => ({ ...m, [owner]: true }));
-      const eth = (window as any).ethereum;
-      if (!eth) throw new Error("No wallet detected");
-      const bp = new ethers.BrowserProvider(eth);
-      const signer = await bp.getSigner();
-      if ((await signer.getAddress()).toLowerCase() !== owner.toLowerCase())
-        throw new Error(`Connect as owner ${owner}`);
-      if (!ethers.isAddress(beneficiary))
-        throw new Error("Invalid beneficiary");
-
-      const ts = localInputToUtcSeconds(whenLocal);
-      if (ts <= Math.floor(Date.now() / 1000))
-        throw new Error("Activation must be in the future");
-
-      const mod = new ethers.Contract(moduleAddr, HeirSafeModuleABI, signer);
-      const tx = await mod.setBeneficiary(beneficiary, ts);
-      await tx.wait();
-      setEditing(null);
-      await loadRows();
-    } catch (e: any) {
-      alert(e?.reason || e?.message || String(e));
-    } finally {
-      setBusyByOwner((m) => ({ ...m, [owner]: false }));
-    }
-  }
-
-  async function doProlong(owner: string, whenLocal: string) {
-    try {
-      setBusyByOwner((m) => ({ ...m, [owner]: true }));
-      const eth = (window as any).ethereum;
-      if (!eth) throw new Error("No wallet detected");
-      const bp = new ethers.BrowserProvider(eth);
-      const signer = await bp.getSigner();
-      if ((await signer.getAddress()).toLowerCase() !== owner.toLowerCase())
-        throw new Error(`Connect as owner ${owner}`);
-
-      const ts = localInputToUtcSeconds(whenLocal);
-      if (ts <= Math.floor(Date.now() / 1000))
-        throw new Error("Activation must be in the future");
-
-      const mod = new ethers.Contract(moduleAddr, HeirSafeModuleABI, signer);
-      const tx = await mod.setActivationTime(ts);
-      await tx.wait();
-      setEditing(null);
-      await loadRows();
-    } catch (e: any) {
-      alert(e?.reason || e?.message || String(e));
-    } finally {
-      setBusyByOwner((m) => ({ ...m, [owner]: false }));
-    }
-  }
-
-  async function doRemove(owner: string) {
-    try {
-      if (!confirm("Remove beneficiary and activation time?")) return;
-      setBusyByOwner((m) => ({ ...m, [owner]: true }));
-      const eth = (window as any).ethereum;
-      if (!eth) throw new Error("No wallet detected");
-      const bp = new ethers.BrowserProvider(eth);
-      const signer = await bp.getSigner();
-      if ((await signer.getAddress()).toLowerCase() !== owner.toLowerCase())
-        throw new Error(`Connect as owner ${owner}`);
-
-      const mod = new ethers.Contract(moduleAddr, HeirSafeModuleABI, signer);
-
-      // Prefer new removeBeneficiary(), fallback to setBeneficiary(0,0)
-      const fn = mod.interface.getFunction("removeBeneficiary", []);
-      let tx;
-      if (fn) {
-        tx = await mod.removeBeneficiary();
-      } else {
-        tx = await mod.setBeneficiary(ethers.ZeroAddress, 0);
-      }
-      await tx.wait();
-      await loadRows();
-    } catch (e: any) {
-      alert(e?.reason || e?.message || String(e));
-    } finally {
-      setBusyByOwner((m) => ({ ...m, [owner]: false }));
-    }
-  }
-
-  async function doClaim(owner: string) {
-    try {
-      setBusyByOwner((m) => ({ ...m, [owner]: true }));
-      const eth = (window as any).ethereum;
-      if (!eth) throw new Error("No wallet detected");
-      const bp = new ethers.BrowserProvider(eth);
-      const signer = await bp.getSigner();
-
-      const prev = await computePrevOwner(readProvider as any, safeAddr, owner);
-      const mod = new ethers.Contract(moduleAddr, HeirSafeModuleABI, signer);
-      const tx = await mod.claimSafe(owner, prev);
-      await tx.wait();
-      await loadRows();
-    } catch (e: any) {
-      // If it looks like "Activation time not reached", re-poll and explain
-      try {
-        const b = await (readProvider as any).getBlock("latest");
-        if (b?.timestamp) setChainNow(Number(b.timestamp));
-      } catch {}
-
-      const msg = e?.reason || e?.message || String(e);
-      if (/Activation time not reached/i.test(msg)) {
-        alert(
-          "Activation time not reached on-chain yet. Please wait a few seconds and try again."
-        );
-      } else {
-        alert(msg);
-      }
-    } finally {
-      setBusyByOwner((m) => ({ ...m, [owner]: false }));
-    }
-  }
-
-  return (
-    <section className="p-4 rounded-2xl bg-neutral-900 space-y-3">
-      <h2 className="font-medium">Owners & heirs</h2>
-      {!readProvider && (
-        <p className="text-xs opacity-70">
-          {chainId == null
-            ? "Network: unknown"
-            : CHAINS[chainId]
-            ? `Network: ${CHAINS[chainId].name}`
-            : `Network ${chainId} not supported`}
-        </p>
-      )}
-
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead className="text-left text-neutral-300">
-            <tr className="border-t border-neutral-800/70">
-              <th className="py-2 pr-4">Owner</th>
-              <th className="py-2 pr-4">Beneficiary</th>
-              <th className="py-2 pr-4">Activation</th>
-              <th className="py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="p-4 text-sm opacity-70">
-                  No owners found (or failed to load).
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => {
-                const rowBusy = !!busyByOwner[r.owner];
-                const nowB = BigInt(nowSec);
-                const isOwnerSigner =
-                  signerAddr &&
-                  signerAddr.toLowerCase() === r.owner.toLowerCase();
-
-                const signerIsBeneficiary =
-                  signerAddr &&
-                  r.beneficiary !== ethers.ZeroAddress &&
-                  signerAddr.toLowerCase() === r.beneficiary.toLowerCase();
-
-                const refSec = nowSec + chainOffset;
-                const claimReady = r.ts !== 0n && refSec >= Number(r.ts) + 30; // 30s safety buffer
-
-                const disableRowActions =
-                  !canWriteGlobally || !isOwnerSigner || rowBusy;
-
-                const disableClaim =
-                  !canWriteGlobally ||
-                  !signerIsBeneficiary ||
-                  !claimReady ||
-                  rowBusy;
-
-                const showSet = r.beneficiary === ethers.ZeroAddress;
-                const showProlong = r.beneficiary !== ethers.ZeroAddress;
-                const showRemove = r.beneficiary !== ethers.ZeroAddress;
-
-                const isEditingRow = editing && editing.owner === r.owner;
-
-                return (
-                  <>
-                    <tr
-                      key={r.owner}
-                      className="border-t border-neutral-800 align-top"
-                    >
-                      <td className="py-2 pr-4 break-all">
-                        <Address addr={r.owner} variant="ghost" />
-                      </td>
-                      <td className="py-2 pr-4 break-all">
-                        <Address addr={r.beneficiary} />
-                      </td>
-                      <td className="py-2 pr-4">
-                        {r.ts !== 0n &&
-                          (() => {
-                            const cd = fmtCountdown(r.ts, refSec);
-                            return (
-                              <span
-                                className={`text-xs mt-1 ${
-                                  cd.isFuture
-                                    ? "text-neutral-300"
-                                    : "text-emerald-300"
-                                }`}
-                              >
-                                {cd.label}
-                              </span>
-                            );
-                          })()}
-                      </td>
-                      <td className="py-2">
-                        <div className="flex flex-wrap gap-2">
-                          {showSet && (
-                            <button
-                              className="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
-                              onClick={() =>
-                                setEditing({
-                                  mode: "set",
-                                  owner: r.owner,
-                                  beneficiary: "",
-                                  dtLocal: "",
-                                })
-                              }
-                              disabled={disableRowActions}
-                              title={
-                                !enabled
-                                  ? "Module must be enabled"
-                                  : isSafeApp
-                                  ? "Disabled in Safe App"
-                                  : !isOwnerSigner
-                                  ? "Connect the owner’s wallet"
-                                  : undefined
-                              }
-                            >
-                              {rowBusy ? "…" : "Set"}
-                            </button>
-                          )}
-                          {showProlong && (
-                            <button
-                              className="px-2 py-1 rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-50"
-                              onClick={() =>
-                                setEditing({
-                                  mode: "prolong",
-                                  owner: r.owner,
-                                  beneficiary: r.beneficiary,
-                                  dtLocal: toLocalInputValue(r.ts) || "",
-                                })
-                              }
-                              disabled={disableRowActions}
-                            >
-                              {rowBusy ? "…" : "Prolong"}
-                            </button>
-                          )}
-                          {showRemove && (
-                            <button
-                              className="px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 disabled:opacity-50"
-                              onClick={() => doRemove(r.owner)}
-                              disabled={disableRowActions}
-                            >
-                              {rowBusy ? "…" : "Remove"}
-                            </button>
-                          )}
-                          {signerIsBeneficiary && (
-                            <button
-                              className="px-2 py-1 rounded bg-amber-700 hover:bg-amber-600 disabled:opacity-50"
-                              onClick={() => doClaim(r.owner)}
-                              disabled={disableClaim}
-                              title={
-                                !enabled
-                                  ? "Module must be enabled"
-                                  : isSafeApp
-                                  ? "Disabled in Safe App"
-                                  : !claimReady
-                                  ? `Activation at ${fmtUTC(r.ts)}`
-                                  : undefined
-                              }
-                            >
-                              {rowBusy
-                                ? "…"
-                                : claimReady
-                                ? "Claim"
-                                : "Claim (not yet)"}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-
-                    {isEditingRow && (
-                      <tr className="border-t border-neutral-800">
-                        <td colSpan={4} className="py-3">
-                          <div className="flex flex-wrap gap-3 items-end">
-                            {editing.mode === "set" && (
-                              <div className="flex flex-col gap-1">
-                                <label className="text-xs opacity-70">
-                                  Beneficiary
-                                </label>
-                                <input
-                                  className="px-3 py-2 rounded bg-neutral-800 min-w-[24rem]"
-                                  placeholder="0x… beneficiary"
-                                  value={editing.beneficiary}
-                                  onChange={(e) =>
-                                    setEditing(
-                                      (st) =>
-                                        st && {
-                                          ...st,
-                                          beneficiary: e.target.value,
-                                        }
-                                    )
-                                  }
-                                />
-                              </div>
-                            )}
-                            <div className="flex flex-col gap-1">
-                              <label className="text-xs opacity-70">
-                                Activation (local)
-                              </label>
-                              <input
-                                type="datetime-local"
-                                className="px-3 py-2 rounded bg-neutral-800"
-                                value={editing.dtLocal}
-                                onChange={(e) =>
-                                  setEditing(
-                                    (st) =>
-                                      st && { ...st, dtLocal: e.target.value }
-                                  )
-                                }
-                              />
-                            </div>
-                            <div className="flex gap-2">
-                              {editing.mode === "set" ? (
-                                <button
-                                  className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
-                                  onClick={() =>
-                                    doSet(
-                                      editing.owner,
-                                      editing.beneficiary,
-                                      editing.dtLocal
-                                    )
-                                  }
-                                  disabled={
-                                    !canWriteGlobally ||
-                                    !signerAddr ||
-                                    signerAddr.toLowerCase() !==
-                                      editing.owner.toLowerCase() ||
-                                    !editing.dtLocal ||
-                                    (editing.mode === "set" &&
-                                      !ethers.isAddress(editing.beneficiary))
-                                  }
-                                >
-                                  Save
-                                </button>
-                              ) : (
-                                <button
-                                  className="px-3 py-2 rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-50"
-                                  onClick={() =>
-                                    doProlong(editing.owner, editing.dtLocal)
-                                  }
-                                  disabled={
-                                    !canWriteGlobally ||
-                                    !signerAddr ||
-                                    signerAddr.toLowerCase() !==
-                                      editing.owner.toLowerCase() ||
-                                    !editing.dtLocal
-                                  }
-                                >
-                                  Save
-                                </button>
-                              )}
-                              <button
-                                className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700"
-                                onClick={() => setEditing(null)}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
   );
 }
