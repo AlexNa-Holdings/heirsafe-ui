@@ -95,7 +95,7 @@ vite.config.ts
 This section contains the contents of the repository's files.
 
 <file path="public/logo-heirsafe.svg">
-<!-- Heart-on-shield logo (clean, scalable) -->
+<!-- Heart-on-shield logo (bigger, centered heart) -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
     <linearGradient id="hs-g" x1="0" y1="0" x2="1" y2="1">
@@ -105,16 +105,16 @@ This section contains the contents of the repository's files.
   </defs>
 
   <!-- shield -->
-  <path d="M32 4l20 6v16c0 13-8.3 24.6-20 28-11.7-3.4-20-15-20-28V10l20-6z"
-        fill="url(#hs-g)"/>
+  <path d="M32 4l20 6v16c0 13-8.3 24.6-20 28-11.7-3.4-20-15-20-28V10l20-6z" fill="url(#hs-g)"/>
 
   <!-- subtle inner highlight -->
-  <path d="M12 25c0-5 0-9 0-15l20-6 20 6v5C38 16 26 18 18 22c-3 2-4 2-6 3z"
-        fill="#ffffff" opacity=".08"/>
+  <path d="M12 25c0-5 0-9 0-15l20-6 20 6v5C38 16 26 18 18 22c-3 2-4 2-6 3z" fill="#ffffff" opacity=".08"/>
 
-  <!-- heart -->
-  <path d="M32 42s-9-5.3-9-12a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 6.7-9 12-9 12z"
-        fill="#0a0a0a" opacity=".88"/>
+  <!-- heart: scale up around (32,32), then nudge up 4px -->
+  <path
+    transform="translate(0,-4) translate(32,32) scale(1.32) translate(-32,-32)"
+    d="M32 42s-9-5.3-9-12a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 6.7-9 12-9 12z"
+    fill="#0a0a0a" opacity=".88"/>
 </svg>
 </file>
 
@@ -132,39 +132,6 @@ This section contains the contents of the repository's files.
     { "src": "/favicon.svg?v=2", "sizes": "any", "type": "image/svg+xml" }
   ]
 }
-</file>
-
-<file path="public/favicon.svg">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#10b981"/>
-      <stop offset="1" stop-color="#059669"/>
-    </linearGradient>
-  </defs>
-  <!-- shield -->
-  <path d="M32 4l20 6v16c0 13-8.3 24.6-20 28-11.7-3.4-20-15-20-28V10l20-6z" fill="url(#g)"/>
-  <!-- heart -->
-  <path d="M32 42s-9-5.3-9-12a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 6.7-9 12-9 12z" fill="#0a0a0a" opacity=".85"/>
-</svg>
-</file>
-
-<file path="public/safari-pinned-tab.svg">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <path d="M32 4l20 6v16c0 13-8.3 24.6-20 28-11.7-3.4-20-15-20-28V10l20-6zM32 42s-9-5.3-9-12a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 6.7-9 12-9 12z" fill="#000"/>
-</svg>
-</file>
-
-<file path="src/abi/HeirSafeModule.ts">
-export const HeirSafeModuleABI = [
-  "function avatar() view returns (address)",
-  "function heirConfigs(address) view returns (address beneficiary, uint256 activationTime)",
-  "function setBeneficiary(address beneficiary, uint256 activationTime)",
-  "function setActivationTime(uint256 newActivationTime)",
-  "function claimSafe(address owner, address prevOwner)",
-  "event BeneficiarySet(address indexed owner, address indexed beneficiary)",
-  "event ActivationTimeSet(address indexed owner, uint256 activationTime)"
-] as const;
 </file>
 
 <file path="src/abi/HeirSafeModuleFactory.ts">
@@ -1677,306 +1644,44 @@ export default defineConfig({
 })
 </file>
 
-<file path="src/components/AppHeader.tsx">
-import NetworkSwitcher from "./NetworkSwitcher";
-import { ConnectButton } from "./ConnectButton";
-import Address from "./Address";
-import Logo from "./Logo";
+<file path="public/favicon.svg">
+<!-- Favicon (bigger, centered heart) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="hs-g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
 
-export default function AppHeader({
-  safeAddr,
-  walletAddr,
-}: {
-  safeAddr: string;
-  walletAddr?: string;
-}) {
-  return (
-    <nav className="sticky top-0 z-50 border-b border-neutral-800 bg-neutral-950/70 backdrop-blur supports-[backdrop-filter]:bg-neutral-950/60">
-      <div className="max-w-5xl mx-auto h-14 px-4 flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <img
-            src="/logo-heirsafe.svg"
-            alt="HeirSafe"
-            className="h-7 w-7 md:h-8 md:w-8 drop-shadow-sm"
-          />
-          <span className="font-semibold tracking-tight">HeirSafe</span>
-          {safeAddr && <Address addr={safeAddr} />}
-        </div>
-        <div className="flex items-center gap-3">
-          <NetworkSwitcher />
-          {/* wallet address pill (hide if unknown) */}
-          {walletAddr ? <Address addr={walletAddr} /> : null}
-          <ConnectButton />
-        </div>
-      </div>
-    </nav>
-  );
-}
+  <!-- shield -->
+  <path d="M32 6l18 5v14c0 12-7.5 22.5-18 25.6C21.5 47.5 14 37 14 25V11l18-5z" fill="url(#hs-g)"/>
+
+  <!-- heart: scale up around (32,32), then nudge up 4px -->
+  <path
+    transform="translate(0,-4) translate(32,32) scale(1.32) translate(-32,-32)"
+    d="M32 40s-7.5-4.5-7.5-10.2a4.2 4.2 0 0 1 7.5-2.5 4.2 4.2 0 0 1 7.5 2.5C39.5 35.5 32 40 32 40z"
+    fill="#0a0a0a" opacity=".9"/>
+</svg>
 </file>
 
-<file path="src/components/InstallModule.tsx">
-import { useState } from "react";
-import { ethers } from "ethers";
-import { useSafeApp } from "../lib/safeApp";
+<file path="public/safari-pinned-tab.svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <path d="M32 4l20 6v16c0 13-8.3 24.6-20 28-11.7-3.4-20-15-20-28V10l20-6zM32 42s-9-5.3-9-12a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 6.7-9 12-9 12z" fill="#000"/>
+</svg>
+</file>
 
-
-type Props = {
-  safeAddr: string;
-  factoryAddr: string;
-  predictedModule: string;
-  readProvider: ethers.Provider;
-  isDeployed: boolean;
-  isEnabled: boolean;
-  onChanged?: () => Promise<void> | void;
-};
-
-export default function InstallModule({
-  safeAddr,
-  factoryAddr,
-  predictedModule,
-  readProvider,
-  isDeployed,
-  isEnabled,
-  onChanged,
-}: Props) {
-  const { isSafeApp, sdk } = useSafeApp();
-  const [busy, setBusy] = useState(false);
-  const [instructions, setInstructions] = useState<string>("");
-
-  const saltHex =
-    (import.meta.env.VITE_INSTALL_SALT as string) || "0x" + "00".repeat(32);
-
-  const safeUrl = `https://app.safe.global/home?safe=${safeAddr}`;
-
-  // ---------------- SAFE APP (iframe) ----------------
-
-  async function installInsideSafe() {
-    if (!sdk) return;
-    setBusy(true);
-    try {
-      const iface = new ethers.Interface([
-        "function deployModule(address,address,bytes32) external",
-      ]);
-      await sdk.txs.send({
-        txs: [
-          {
-            to: factoryAddr,
-            value: "0",
-            data: iface.encodeFunctionData("deployModule", [
-              safeAddr,
-              predictedModule,
-              saltHex,
-            ]),
-          },
-        ],
-      });
-      await Promise.resolve(onChanged?.());
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function enableInsideSafeOnly() {
-    if (!sdk) return;
-    setBusy(true);
-    try {
-      const iface = new ethers.Interface([
-        "function enableModule(address) external",
-      ]);
-      await sdk.txs.send({
-        txs: [
-          {
-            to: safeAddr,
-            value: "0",
-            data: iface.encodeFunctionData("enableModule", [predictedModule]),
-          },
-        ],
-      });
-      await Promise.resolve(onChanged?.());
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // ---------------- STANDALONE (normal website) ----------------
-
-  async function deployStandalone() {
-    setBusy(true);
-    try {
-      const signer = await (readProvider as ethers.BrowserProvider).getSigner();
-      const iface = new ethers.Interface([
-        "function deployModule(address,address,bytes32) external",
-      ]);
-      const tx = await signer.sendTransaction({
-        to: factoryAddr,
-        data: iface.encodeFunctionData("deployModule", [
-          safeAddr,
-          predictedModule,
-          saltHex,
-        ]),
-      });
-      await tx.wait();
-      await Promise.resolve(onChanged?.());
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function openSafe() {
-    window.open(safeUrl, "_blank", "noopener,noreferrer");
-  }
-
-  // If threshold==1 and signer is an owner -> execute directly with pre-validated signature (no “Sign Text”).
-  // Else -> show instructions (and keep Open Safe UI button visible).
-  async function enableStandaloneSmart() {
-    try {
-      setInstructions("");
-      setBusy(true);
-
-      const browser = readProvider as ethers.BrowserProvider;
-      const signer = await browser.getSigner();
-      const signerAddr = (await signer.getAddress()).toLowerCase();
-
-      const SAFE_ABI = [
-        "function getOwners() view returns (address[])",
-        "function getThreshold() view returns (uint256)",
-        "function nonce() view returns (uint256)",
-        "function execTransaction(address,uint256,bytes,uint8,uint256,uint256,uint256,address,address,bytes) returns (bool)",
-      ];
-      const safe = new ethers.Contract(safeAddr, SAFE_ABI, signer);
-
-      const [owners, thresholdBn] = await Promise.all([
-        safe.getOwners(),
-        safe.getThreshold(),
-      ]);
-      const isOwner = owners.map((o: string) => o.toLowerCase()).includes(signerAddr);
-      const threshold = BigInt(thresholdBn.toString());
-
-      if (threshold === 1n && isOwner) {
-        const MM_IFACE = new ethers.Interface(["function enableModule(address)"]);
-        const to = safeAddr;
-        const value = 0;
-        const data = MM_IFACE.encodeFunctionData("enableModule", [predictedModule]);
-        const operation = 0; // CALL
-        const safeTxGas = 0;
-        const baseGas = 0;
-        const gasPrice = 0;
-        const gasToken = ethers.ZeroAddress;
-        const refundReceiver = ethers.ZeroAddress;
-
-        // Pre-validated signature: r(owner) || s(0) || v(1)
-        const rOwner = ethers.zeroPadValue(await signer.getAddress(), 32);
-        const sZero = ethers.ZeroHash;
-        const vOne = ethers.toBeHex(1, 1);
-        const preValidatedSig = ethers.concat([rOwner, sZero, vOne]);
-
-        const tx = await safe.execTransaction(
-          to,
-          value,
-          data,
-          operation,
-          safeTxGas,
-          baseGas,
-          gasPrice,
-          gasToken,
-          refundReceiver,
-          preValidatedSig
-        );
-        await tx.wait();
-        await Promise.resolve(onChanged?.());
-        return;
-      }
-
-      // Multisig or non-owner: show instructions (and keep the Open Safe UI button)
-      setInstructions(
-        [
-          "Enable requires a Safe transaction:",
-          "1) Click “Open Safe UI”.",
-          "2) New transaction → Contract interaction.",
-          `3) Contract: ${safeAddr}`,
-          "4) Function: enableModule(address)",
-          `5) Parameter: ${predictedModule}`,
-          "6) Review and submit. Collect required owner signatures.",
-          "",
-        ].join("\n")
-      );
-    } catch (e: any) {
-      setInstructions(e?.reason || e?.message || String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/40 text-amber-200 text-sm space-y-3">
-      <div className="break-all">Predicted module: {predictedModule}</div>
-
-      {isSafeApp ? (
-        <div className="flex flex-col gap-2">
-          {!isDeployed && !isEnabled && (
-            <button
-              className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
-              onClick={installInsideSafe}
-              disabled={busy}
-            >
-              {busy ? "Submitting…" : "Install module to this Safe"}
-            </button>
-          )}
-          {isDeployed && !isEnabled && (
-            <button
-              className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
-              onClick={enableInsideSafeOnly}
-              disabled={busy}
-            >
-              {busy ? "Submitting…" : "Enable module"}
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {!isDeployed && !isEnabled && (
-            <button
-              className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
-              onClick={deployStandalone}
-              disabled={busy}
-            >
-              {busy ? "Deploying…" : "Deploy module instance"}
-            </button>
-          )}
-
-          {isDeployed && !isEnabled && (
-            <>
-              <button
-                className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
-                onClick={enableStandaloneSmart}
-                disabled={busy}
-              >
-                {busy ? "Working…" : "Enable module"}
-              </button>
-
-              {/* Keep Open Safe visible even when instructions are shown */}
-              <div className="flex gap-2 items-center">
-                <button
-                  className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700"
-                  onClick={openSafe}
-                  title="Open your Safe to enable from the UI."
-                >
-                  Open Safe UI
-                </button>
-              </div>
-
-              {!!instructions && (
-                <pre className="whitespace-pre-wrap text-amber-200/90 bg-amber-900/30 p-2 rounded">
-                  {instructions}
-                </pre>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+<file path="src/abi/HeirSafeModule.ts">
+export const HeirSafeModuleABI = [
+  "function avatar() view returns (address)",
+  "function heirConfigs(address) view returns (address beneficiary, uint256 activationTime)",
+  "function setBeneficiary(address beneficiary, uint256 activationTime)",
+  "function setActivationTime(uint256 newActivationTime)",
+  "function claimSafe(address owner, address prevOwner)",
+  "function removeBeneficiary()", 
+  "event BeneficiarySet(address indexed owner, address indexed beneficiary)",
+  "event ActivationTimeSet(address indexed owner, uint256 activationTime)"
+] as const;
 </file>
 
 <file path="src/components/NetworkSwitcher.tsx">
@@ -2089,53 +1794,6 @@ export default function NetworkSwitcher() {
 }
 </file>
 
-<file path="src/config/chains.ts">
-// src/config/chains.ts
-export type AddEthereumChainParameter = {
-  chainId: `0x${string}`;
-  chainName: string;
-  nativeCurrency: { name: string; symbol: string; decimals: number };
-  rpcUrls: string[];
-  blockExplorerUrls?: string[];
-};
-
-export type ChainConfig = {
-  id: number;
-  name: string;
-  factory: string; // your HeirSafe factory per chain
-  txService?: string; // Safe Tx Service base URL (optional)
-  addChainParams?: AddEthereumChainParameter; // for wallet_addEthereumChain
-};
-
-export const CHAINS: Record<number, ChainConfig> = {
-  11155111: {
-    id: 11155111,
-    name: "Sepolia (test)",
-    factory: "0xC20bB5836A8ef3f8b7b39211a4521C6D89EbAd78",
-    txService: "https://safe-transaction-sepolia.safe.global",
-    addChainParams: {
-      chainId: "0xaa36a7",
-      chainName: "Sepolia",
-      nativeCurrency: { name: "Sepolia ETH", symbol: "ETH", decimals: 18 },
-      rpcUrls: ["https://rpc.sepolia.org", "https://sepolia.drpc.org"],
-      blockExplorerUrls: ["https://sepolia.etherscan.io"],
-    },
-  },
-  // Add more networks as you deploy:
-  // 1: { ... }, 8453: { ... }, 42161: { ... }, etc.
-};
-
-export function getFactoryAddress(chainId: number): string | null {
-  const a = CHAINS[chainId]?.factory;
-  return a ? a.trim() : null;
-}
-
-export function getTxServiceUrl(chainId: number): string | null {
-  return CHAINS[chainId]?.txService ?? null;
-}
-export const SUPPORTED_CHAIN_IDS = Object.keys(CHAINS).map((x) => Number(x));
-</file>
-
 <file path=".gitignore">
 # Logs
 logs
@@ -2165,27 +1823,479 @@ dist-ssr
 .env
 </file>
 
+<file path="src/components/AppHeader.tsx">
+import NetworkSwitcher from "./NetworkSwitcher";
+import { ConnectButton } from "./ConnectButton";
+import Address from "./Address";
+import Logo from "./Logo";
+
+export default function AppHeader({
+  safeAddr,
+  walletAddr,
+}: {
+  safeAddr: string;
+  walletAddr?: string;
+}) {
+  return (
+    <nav className="sticky top-0 z-50 border-b border-neutral-800 bg-neutral-950/70 backdrop-blur supports-[backdrop-filter]:bg-neutral-950/60">
+      <div className="max-w-5xl mx-auto h-14 px-4 flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          <img
+            src="/logo-heirsafe.svg"
+            alt="HeirSafe"
+            className="h-7 w-7 md:h-8 md:w-8 drop-shadow-sm"
+          />
+          <span className="font-semibold tracking-tight">HeirSafe</span>
+          {safeAddr && <Address addr={safeAddr} />}
+        </div>
+        <div className="flex items-center gap-3">
+          <NetworkSwitcher />
+          {/* wallet address pill (hide if unknown) */}
+          {walletAddr ? <Address addr={walletAddr} /> : null}
+          <ConnectButton />
+        </div>
+      </div>
+    </nav>
+  );
+}
+</file>
+
+<file path="src/components/InstallModule.tsx">
+import { useState } from "react";
+import { ethers } from "ethers";
+import { useSafeApp } from "../lib/safeApp";
+import Address from "./Address";
+import { HeirSafeModuleFactoryABI } from "../abi/HeirSafeModuleFactory";
+
+type Props = {
+  safeAddr: string;
+  factoryAddr: string;
+  predictedModule: string;
+  readProvider: ethers.Provider;
+  isDeployed: boolean;
+  isEnabled: boolean;
+  onChanged?: () => Promise<void> | void;
+};
+
+const SafeABI = [
+  "function getThreshold() view returns (uint256)",
+  "function isOwner(address) view returns (bool)",
+  "function getNonce() view returns (uint256)",
+  "function getTransactionHash(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 _nonce) view returns (bytes32)",
+  "function execTransaction(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,bytes signatures) returns (bool)",
+];
+
+export default function InstallModule({
+  safeAddr,
+  factoryAddr,
+  predictedModule,
+  readProvider,
+  isDeployed,
+  isEnabled,
+  onChanged,
+}: Props) {
+  const { isSafeApp, sdk } = useSafeApp();
+  const [busy, setBusy] = useState(false);
+  const [instructions, setInstructions] = useState<string>("");
+
+  const saltHex =
+    (import.meta.env.VITE_INSTALL_SALT as string) || "0x" + "00".repeat(32);
+
+  // --------- helpers ---------
+
+  async function getChainPrefix(): Promise<string> {
+    try {
+      const net = await readProvider.getNetwork();
+      const id = Number(net.chainId);
+      // minimal mapping (extend as you add chains)
+      if (id === 1) return "eth:";
+      if (id === 11155111) return "sep:";
+      return `${id}:`;
+    } catch {
+      return "";
+    }
+  }
+
+  async function openSafe() {
+    const pref = await getChainPrefix();
+    const url = `https://app.safe.global/home?safe=${pref}${safeAddr}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  async function readThreshold(): Promise<number> {
+    const safe = new ethers.Contract(safeAddr, SafeABI, readProvider as any);
+    const t = await safe.getThreshold();
+    return Number(t);
+  }
+
+  async function signerAndIsOwner(): Promise<{
+    signer: ethers.Signer;
+    signerAddr: string;
+    isOwner: boolean;
+  }> {
+    const eth = (window as any).ethereum;
+    if (!eth) throw new Error("No wallet detected");
+    const bp = new ethers.BrowserProvider(eth);
+    const signer = await bp.getSigner();
+    const signerAddr = await signer.getAddress();
+    const safe = new ethers.Contract(safeAddr, SafeABI, readProvider as any);
+    const yes = await safe.isOwner(signerAddr);
+    return { signer, signerAddr, isOwner: yes };
+  }
+
+  // --------- SAFE APP (iframe) ---------
+
+  async function installInsideSafe() {
+    if (!sdk) return;
+    setBusy(true);
+    try {
+      // Encode the correct factory function from your ABI
+      const iface = new ethers.Interface(HeirSafeModuleFactoryABI);
+      let data: string;
+      try {
+        iface.getFunction("deployForSafe");
+        data = iface.encodeFunctionData("deployForSafe", [safeAddr, saltHex]);
+      } catch {
+        iface.getFunction("deploy");
+        data = iface.encodeFunctionData("deploy", [safeAddr, saltHex]);
+      }
+
+      await sdk.txs.send({
+        txs: [
+          {
+            to: factoryAddr,
+            value: "0",
+            data,
+          },
+        ],
+      });
+      await Promise.resolve(onChanged?.());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function enableInsideSafeOnly() {
+    if (!sdk) return;
+    setBusy(true);
+    try {
+      const iface = new ethers.Interface(["function enableModule(address)"]);
+      const data = iface.encodeFunctionData("enableModule", [predictedModule]);
+      await sdk.txs.send({
+        txs: [
+          {
+            to: safeAddr,
+            value: "0",
+            data,
+          },
+        ],
+      });
+      await Promise.resolve(onChanged?.());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // --------- STANDALONE (normal website) ---------
+
+  // Deploy:
+  // - threshold > 1 → instruct to do it from Safe UI (multisig)
+  // - threshold == 1 → one-click deploy from wallet (permissionless)
+  async function deployStandalone() {
+    try {
+      if (!ethers.isAddress(factoryAddr)) throw new Error("Bad factory");
+      if (!ethers.isAddress(safeAddr)) throw new Error("Bad safe");
+      if (!/^0x[0-9a-fA-F]{64}$/.test(saltHex)) {
+        throw new Error("VITE_INSTALL_SALT must be 0x + 64 hex chars");
+      }
+
+      const t = await readThreshold();
+      if (t > 1) {
+        const pref = await getChainPrefix();
+        setInstructions(
+          [
+            "Deploy requires a Safe transaction:",
+            "1) Open Safe UI → New transaction → Contract interaction.",
+            `2) Contract: ${factoryAddr}`,
+            "3) Function: deployForSafe(address, bytes32) (or deploy(address, bytes32))",
+            `4) Params:\n   - safe = ${safeAddr}\n   - salt = ${saltHex}`,
+            `5) Review and submit. Collect required signatures (${t}-of-owners).\n`,
+            `Safe link: https://app.safe.global/home?safe=${pref}${safeAddr}`,
+          ].join("\n")
+        );
+        return;
+      }
+
+      // don’t try to deploy if code already exists at predicted
+      const code = await (readProvider as any).getCode(predictedModule);
+      if (code && code !== "0x") {
+        alert("Module already deployed at the predicted address.");
+        return;
+      }
+
+      const { signer } = await signerAndIsOwner();
+
+      // call the factory directly using your ABI
+      const factory = new ethers.Contract(
+        factoryAddr,
+        HeirSafeModuleFactoryABI,
+        signer
+      );
+
+      let tx;
+      try {
+        factory.interface.getFunction("deployForSafe");
+        tx = await factory.deployForSafe(safeAddr, saltHex);
+      } catch {
+        factory.interface.getFunction("deploy");
+        tx = await factory.deploy(safeAddr, saltHex);
+      }
+
+      await tx.wait();
+      await onChanged?.();
+    } catch (e: any) {
+      alert(e?.reason || e?.message || String(e));
+    }
+  }
+
+  // Enable:
+  // - threshold > 1 or not owner → show Safe UI instructions
+  // - threshold == 1 and signer is owner → build & execute Safe tx locally
+  async function enableStandaloneSmart() {
+    setBusy(true);
+    try {
+      const t = await readThreshold();
+      const { signer, signerAddr, isOwner } = await signerAndIsOwner();
+
+      if (t !== 1 || !isOwner) {
+        const pref = await getChainPrefix();
+        setInstructions(
+          [
+            "Enable requires a Safe transaction:",
+            "1) Open Safe UI → New transaction → Contract interaction.",
+            `2) Contract: ${safeAddr}`,
+            "3) Function: enableModule(address)",
+            `4) Param: module = ${predictedModule}`,
+            `5) Review and submit. Collect required signatures (${t}-of-owners).\n`,
+            `You are connected as ${signerAddr}${!isOwner ? " (not a Safe owner)" : ""}.`,
+            `Safe link: https://app.safe.global/home?safe=${pref}${safeAddr}`,
+          ].join("\n")
+        );
+        return;
+      }
+
+      // threshold == 1 and signer is owner → execute Safe tx directly
+      const safeRead = new ethers.Contract(safeAddr, SafeABI, readProvider);
+      const safeWrite = new ethers.Contract(safeAddr, SafeABI, signer);
+
+      const enableIface = new ethers.Interface([
+        "function enableModule(address)",
+      ]);
+      const data = enableIface.encodeFunctionData("enableModule", [
+        predictedModule,
+      ]);
+
+      const to = safeAddr;
+      const value = 0;
+      const operation = 0; // CALL
+      const safeTxGas = 0;
+      const baseGas = 0;
+      const gasPrice = 0;
+      const gasToken = ethers.ZeroAddress;
+      const refundReceiver = ethers.ZeroAddress;
+      const nonce = await safeRead.getNonce();
+
+      // Safe’s on-chain hash (works for v1.3.x)
+      const txHash = await safeRead.getTransactionHash(
+        to,
+        value,
+        data,
+        operation,
+        safeTxGas,
+        baseGas,
+        gasPrice,
+        gasToken,
+        refundReceiver,
+        nonce
+      );
+
+      // ECDSA sign the hash
+      const sig = await signer.signMessage(ethers.getBytes(txHash));
+
+      // Execute
+      const tx = await safeWrite.execTransaction(
+        to,
+        value,
+        data,
+        operation,
+        safeTxGas,
+        baseGas,
+        gasPrice,
+        gasToken,
+        refundReceiver,
+        sig
+      );
+      await tx.wait();
+      await onChanged?.();
+    } catch (e: any) {
+      alert(e?.reason || e?.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/40 text-amber-200 text-sm space-y-3">
+      <div className="space-y-1 text-xs text-neutral-300">
+        <div className="flex items-center gap-2">
+          <span className="opacity-70">Factory:</span>
+          <Address addr={factoryAddr} />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="opacity-70">Predicted module:</span>
+          <Address addr={predictedModule} />
+        </div>
+      </div>
+
+      {isSafeApp ? (
+        <div className="flex flex-col gap-2">
+          {!isDeployed && !isEnabled && (
+            <button
+              className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
+              onClick={installInsideSafe}
+              disabled={busy}
+            >
+              {busy ? "Submitting…" : "Install module to this Safe"}
+            </button>
+          )}
+          {isDeployed && !isEnabled && (
+            <button
+              className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
+              onClick={enableInsideSafeOnly}
+              disabled={busy}
+            >
+              {busy ? "Submitting…" : "Enable module"}
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {!isDeployed && !isEnabled && (
+            <button
+              className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
+              onClick={deployStandalone}
+              disabled={busy}
+            >
+              {busy ? "Deploying…" : "Deploy module instance"}
+            </button>
+          )}
+
+          {isDeployed && !isEnabled && (
+            <>
+              <button
+                className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
+                onClick={enableStandaloneSmart}
+                disabled={busy}
+              >
+                {busy ? "Working…" : "Enable module"}
+              </button>
+
+              <div className="flex gap-2 items-center">
+                <button
+                  className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700"
+                  onClick={openSafe}
+                  title="Open your Safe to deploy/enable from the UI."
+                >
+                  Open Safe UI
+                </button>
+              </div>
+
+              {!!instructions && (
+                <pre className="whitespace-pre-wrap text-amber-200/90 bg-amber-900/30 p-2 rounded">
+                  {instructions}
+                </pre>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="src/config/chains.ts">
+// src/config/chains.ts
+export type AddEthereumChainParameter = {
+  chainId: `0x${string}`;
+  chainName: string;
+  nativeCurrency: { name: string; symbol: string; decimals: number };
+  rpcUrls: string[];
+  blockExplorerUrls?: string[];
+};
+
+export type ChainConfig = {
+  id: number;
+  name: string;
+  factory: string; // your HeirSafe factory per chain
+  txService?: string; // Safe Tx Service base URL (optional)
+  addChainParams?: AddEthereumChainParameter; // for wallet_addEthereumChain
+};
+
+export const CHAINS: Record<number, ChainConfig> = {
+  11155111: {
+    id: 11155111,
+    name: "Sepolia (test)",
+    factory: "0xE83e2d2abE267741c261f7749A97BA4CE2A63603",
+    txService: "https://safe-transaction-sepolia.safe.global",
+    addChainParams: {
+      chainId: "0xaa36a7",
+      chainName: "Sepolia",
+      nativeCurrency: { name: "Sepolia ETH", symbol: "ETH", decimals: 18 },
+      rpcUrls: ["https://rpc.sepolia.org", "https://sepolia.drpc.org"],
+      blockExplorerUrls: ["https://sepolia.etherscan.io"],
+    },
+  },
+  // Add more networks as you deploy:
+  // 1: { ... }, 8453: { ... }, 42161: { ... }, etc.
+};
+
+export function getFactoryAddress(chainId: number): string | null {
+  const a = CHAINS[chainId]?.factory;
+  return a ? a.trim() : null;
+}
+
+export function getTxServiceUrl(chainId: number): string | null {
+  return CHAINS[chainId]?.txService ?? null;
+}
+export const SUPPORTED_CHAIN_IDS = Object.keys(CHAINS).map((x) => Number(x));
+</file>
+
 <file path="index.html">
-<!-- index.html -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HeirSafe — Safe inheritance module</title>
+    <meta name="description"
+      content="HeirSafe lets Safe owners set beneficiaries and activation times so heirs can claim ownership when the time comes." />
+    <meta name="theme-color" content="#111827" />
+    <meta name="color-scheme" content="dark light" />
 
-  <title>HeirSafe — Safe inheritance module</title>
-  <meta name="description"
-    content="HeirSafe lets Safe owners set beneficiaries and activation times so heirs can claim ownership when the time comes." />
-  <meta name="theme-color" content="#111827" />
-  <meta name="color-scheme" content="dark light" />
-
-
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3" />
-  <link rel="alternate icon" href="/favicon.ico?v=3" sizes="any" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=3" />
-  <link rel="mask-icon" href="/safari-pinned-tab.svg?v=3" color="#10b981" />
-  <link rel="manifest" href="/site.webmanifest?v=3" />
-
-</head>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3" />
+    <link rel="alternate icon" href="/favicon.ico?v=3" sizes="any" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=3" />
+    <link rel="mask-icon" href="/safari-pinned-tab.svg?v=3" color="#10b981" />
+    <link rel="manifest" href="/site.webmanifest?v=3" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Vite will rewrite this to the built file in /assets for production -->
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
 </file>
 
 <file path="package.json">
@@ -2228,6 +2338,244 @@ dist-ssr
     "vite": "^7.1.0"
   }
 }
+</file>
+
+<file path="src/index.css">
+@import "tailwindcss";
+
+/* Global */
+html, body, #root { height: 100%; }
+body { @apply bg-neutral-950 text-neutral-100 antialiased; }
+
+/* Reusable cards/buttons/table */
+.card { @apply p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800; }
+
+.btn { @apply px-3 py-2 rounded disabled:opacity-50; }
+.btn-primary   { @apply bg-emerald-700 hover:bg-emerald-600; }
+.btn-secondary { @apply bg-neutral-800 hover:bg-neutral-700; }
+.btn-info      { @apply bg-sky-700 hover:bg-sky-600; }
+.btn-danger    { @apply bg-rose-700 hover:bg-rose-600; }
+
+.table { @apply min-w-full text-sm; }
+.table thead th { @apply py-2 pr-4 font-medium text-neutral-300; }
+.table tbody td { @apply py-2 pr-4; }
+.table tr { @apply border-t border-neutral-800/70; }
+
+input[type="text"],
+input[type="datetime-local"] { @apply px-3 py-2 rounded bg-neutral-800; }
+
+/* Small code/kbd styling if you show hashes/addresses */
+code { @apply px-1.5 py-0.5 rounded bg-neutral-800/80 text-neutral-200; }
+
+/* ---------- HeirSafe background ---------- */
+.hs-backdrop{
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:0;                      /* keep under main content */
+  display:grid;
+  place-items:center;
+  overflow:clip;
+
+  /* base radial glow behind everything */
+  background:
+    radial-gradient(1200px 800px at 50% 60%, rgba(16,185,129,0.06), transparent 60%),
+    radial-gradient(900px 600px at 40% 30%, rgba(59,130,246,0.05), transparent 70%);
+}
+
+/* animated aurora layer (behind the logo) */
+.hs-backdrop::before{
+  content:"";
+  position:absolute;
+  inset:-20%;
+  background:
+    conic-gradient(from 0deg at 50% 50%,
+      rgba(16,185,129,0.25),
+      rgba(59,130,246,0.18),
+      rgba(236,72,153,0.15),
+      rgba(16,185,129,0.25));
+  filter: blur(80px) saturate(120%);
+  opacity: 0.2;
+  transform-origin: 50% 55%;
+  animation: hs-aurora 40s ease-in-out infinite alternate;
+}
+
+/* subtle vignette at edges */
+.hs-backdrop::after{
+  content:"";
+  position:absolute;
+  inset:-2vmin;
+  background:
+    radial-gradient(1000px 700px at 50% 60%, rgba(0,0,0,0) 0%, rgba(0,0,0,0.25) 70%, rgba(0,0,0,0.45) 100%);
+  mix-blend-mode: multiply;
+  pointer-events:none;
+}
+
+/* the logo itself (keep your previous settings) */
+.hs-backdrop__logo{
+  width: clamp(420px, 50vw, 760px);
+  opacity: 0.12;
+  filter: blur(0.3px) drop-shadow(0 10px 30px rgba(16,185,129,.25));
+  animation: hs-swing 60s ease-in-out infinite;
+  transform-origin: 50% 46%;
+  will-change: transform;
+}
+
+/* your preferred swing */
+@keyframes hs-swing{
+  0%,100% { transform: rotate(0deg) scale(1.6); }
+  25%     { transform: rotate(-33deg) scale(1.9); }
+  50%     { transform: rotate(0deg) scale(1.6); }
+  75%     { transform: rotate(33deg) scale(1.9); }
+}
+
+/* slow, gentle drift of the aurora gradient */
+@keyframes hs-aurora{
+  0%   { transform: rotate(-10deg) scale(1.0); opacity: 0.18; }
+  50%  { transform: rotate( 12deg) scale(1.08); opacity: 0.24; }
+  100% { transform: rotate(-10deg) scale(1.0); opacity: 0.18; }
+}
+
+/* Noise overlay inside the backdrop */
+.hs-backdrop .hs-noise{
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+  opacity: .24;
+
+  /* tile the SVG noise */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.18'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 220px 220px; /* tweak grain density */
+}
+
+
+@media (prefers-reduced-motion: reduce){
+  .hs-backdrop__logo{ animation: none; }
+  .hs-backdrop::before{ animation: none; }
+}
+</file>
+
+<file path="README.md">
+# HeirSafe UI
+
+A minimal, professional web UI for the **HeirSafe** Safe module.
+
+- 🧩 **HeirSafe Module**: lets each Safe owner set a **beneficiary** and an **activation time**. After that time, the beneficiary can **claim** and replace that owner’s address. No funds move; only the owner address changes.
+- 🔗 Module repo: https://github.com/AlexNa-Holdings/heirsafe-module  
+- 🔗 UI repo: https://github.com/AlexNa-Holdings/heirsafe-ui
+
+---
+
+## Features
+
+- **Install / Enable Module**
+  - Predicts the module address from factory + salt
+  - Checks deployment & enablement
+  - If Safe threshold is **1** and you’re an owner, prepares and sends the **Enable Module** tx directly
+  - Otherwise shows clear, copy-ready steps and an “Open Safe UI” shortcut
+- **Owners & Heirs (inline)**
+  - Per owner: **set beneficiary + activation**, **prolong**, **remove**
+  - Local datetime picker → stored on-chain as **UTC seconds**
+  - Live **countdown** (Local + UTC + “ready in / since …”)
+  - If your connected address is a configured beneficiary and time has passed, you’ll see **Claim**
+- **Nice UX**
+  - Short, copyable addresses (`0x1234…abcd`) with tooltip and non-reflow “Copied” bubble
+  - Calm **Status** bar (info/warn/error/success)
+  - Remembers your last Safe (`localStorage`)
+  - Collapsible “What is the HeirSafe module?” intro (remembers state)
+  - Tasteful animated background/logo; respects `prefers-reduced-motion`
+  - Tailwind CSS styling
+
+---
+
+## Configuration
+
+Create `.env.local`:
+
+```ini
+# Optional: pre-fill the Safe address input
+VITE_DEFAULT_SAFE=0xYourSafeAddress
+
+# Required: 32-byte salt to deterministically predict the module address
+# Must be 0x + 64 hex characters
+VITE_INSTALL_SALT=0x0000000000000000000000000000000000000000000000000000000000000000
+```
+
+> The factory address per chain is configured in code at `src/config/chains.ts`.
+
+---
+
+## How It Works (high level)
+
+* **Predict**: compute the deterministic module address from `factory + safe + salt`.
+* **Check**: read code at the predicted address; inspect Safe’s enabled modules.
+* **Enable**:
+
+  * If `threshold === 1` and you are an owner, the app builds and sends the enable tx to your wallet.
+  * Otherwise, it shows Safe UI instructions and a shortcut button.
+* **Owners table**:
+
+  * Reads Safe owners.
+  * Reads `heirConfigs(owner)` (beneficiary, activationTime) from the module.
+  * Inline actions sign with your **EOA** (outside Safe App embedding).
+
+---
+
+
+## Development Notes
+
+* **Tailwind CSS (PostCSS)**
+  If you see: “It looks like you're trying to use `tailwindcss` directly as a PostCSS plugin…”, install and configure:
+
+  ```bash
+  pnpm add -D @tailwindcss/postcss
+  ```
+
+  And ensure your PostCSS config uses `@tailwindcss/postcss`.
+
+* **Accessibility**
+  Background animations respect `prefers-reduced-motion`.
+
+---
+
+## Troubleshooting
+
+* **“Factory not configured for chain X”**
+  Add/update the factory address in `src/config/chains.ts`.
+
+* **“Factory not deployed on this network”**
+  The configured factory address has no bytecode on the active chain—fix the address or switch networks.
+
+* **Enable flow didn’t auto-send**
+  Auto-send only when **threshold = 1** and your connected wallet is a Safe owner; otherwise follow the provided Safe UI steps.
+
+---
+
+## Contributing
+
+PRs welcome! Please keep changes focused and consistent with the existing style (TypeScript, Tailwind). If you add networks, update `src/config/chains.ts` carefully.
+
+---
+
+## License
+
+**GNU General Public License v3.0** — see [LICENSE](./LICENSE).
+
+---
+
+## Author
+
+**Written by [Alex Na](https://x.com/AlexNa)**
+
+* Module: [https://github.com/AlexNa-Holdings/heirsafe-module](https://github.com/AlexNa-Holdings/heirsafe-module)
+* UI: [https://github.com/AlexNa-Holdings/heirsafe-ui](https://github.com/AlexNa-Holdings/heirsafe-ui)
+
+*(Optional) Built with assistance from GPT-5 Thinking.*
+
+```
+::contentReference[oaicite:0]{index=0}
 </file>
 
 <file path="src/App.tsx">
@@ -2274,10 +2622,17 @@ export default function App() {
     const eth = (window as any).ethereum;
     if (eth) setInjected(new ethers.BrowserProvider(eth));
   }, []);
+  // pick a default chain for public read (use the one you host on)
+  const DEFAULT_CHAIN_ID = 11155111; // Sepolia (adjust if needed)
+  const FALLBACK_RPC = CHAINS[DEFAULT_CHAIN_ID]?.rpcUrls?.[0];
+
   const readProvider = useMemo(() => {
     if (safeEip1193) return new ethers.BrowserProvider(safeEip1193 as any);
     if (injected) return injected;
-    return null; // no provider yet
+    // ✅ public read-only provider so tables/labels still load
+    if (FALLBACK_RPC)
+      return new ethers.JsonRpcProvider(FALLBACK_RPC, DEFAULT_CHAIN_ID);
+    return null;
   }, [safeEip1193, injected]);
 
   // Safe address (autofill if embedded)
@@ -2494,8 +2849,10 @@ export default function App() {
 
   return (
     <div className="relative min-h-screen bg-neutral-950 text-neutral-100">
+      {/* Background: heart-on-shield */}
       <div className="hs-backdrop" aria-hidden="true">
         <img src="/logo-heirsafe.svg" alt="" className="hs-backdrop__logo" />
+        <div className="hs-noise" />
       </div>
       <main className="relative z-10 max-w-5xl mx-auto p-6 space-y-6">
         <AppHeader safeAddr={safeAddr} />
@@ -2573,6 +2930,7 @@ export default function App() {
         </section>
 
         <OwnersView
+          key={`${safeAddr}:${predicted}:${chainId ?? "x"}`}
           safeAddr={safeAddr}
           moduleAddr={predicted}
           readProvider={readProvider as any}
@@ -2588,6 +2946,7 @@ export default function App() {
 }
 
 /** Owners & heirs table with inline editor and local datetime picker */
+/** Owners & heirs table with inline editor, countdown, and resilient loading */
 function OwnersView({
   safeAddr,
   moduleAddr,
@@ -2599,7 +2958,7 @@ function OwnersView({
   moduleAddr: string;
   readProvider: ethers.Provider | null;
   enabled?: boolean;
-  chainId: number | null;
+  chainId?: number | null;
 }) {
   const { isSafeApp } = useSafeApp();
 
@@ -2610,10 +2969,70 @@ function OwnersView({
   const [editing, setEditing] = useState<null | {
     mode: "set" | "prolong";
     owner: string;
-    beneficiary: string; // only used for "set"
+    beneficiary: string; // only for "set"
     dtLocal: string; // YYYY-MM-DDTHH:mm
   }>(null);
-  const [nowSec, setNowSec] = useState<number>(Math.floor(Date.now() / 1000));
+
+  // ticks every second so the UI re-renders
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const id = setInterval(
+      () => setNowSec(Math.floor(Date.now() / 1000)),
+      1000
+    );
+    return () => clearInterval(id);
+  }, []);
+
+  // keep small offset = (chain latest block time) - (local time)
+  const [chainOffset, setChainOffset] = useState(0);
+  useEffect(() => {
+    if (!readProvider) return;
+    let stop = false;
+
+    const refresh = async () => {
+      try {
+        const latest = await (readProvider as any).getBlock("latest");
+        const chainTs = Number(
+          latest?.timestamp ?? Math.floor(Date.now() / 1000)
+        );
+        const localTs = Math.floor(Date.now() / 1000);
+        if (!stop) setChainOffset(chainTs - localTs);
+      } catch {
+        // ignore; we'll try again on next tick
+      }
+    };
+
+    refresh();
+    const id = setInterval(refresh, 30000); // refresh offset every 30s
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, [readProvider]);
+
+  // poll latest block time (every 5s)
+  useEffect(() => {
+    if (!readProvider) return;
+    let stop = false;
+
+    async function tick() {
+      try {
+        const b = await (readProvider as any).getBlock("latest");
+        if (!stop && b?.timestamp != null) {
+          setChainNow(Number(b.timestamp));
+        }
+      } catch {
+        // ignore transient RPC errors
+      }
+    }
+
+    tick();
+    const id = setInterval(tick, 5000);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, [readProvider]);
 
   // Helpers
   const fmtUTC = (ts: bigint) =>
@@ -2629,19 +3048,46 @@ function OwnersView({
     )}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
   const localInputToUtcSeconds = (v: string) => {
-    // v like "2025-08-20T14:30" (local time). JS Date treats it as local.
-    const ms = Date.parse(v);
+    const ms = Date.parse(v); // local time parsed as local
     if (!Number.isFinite(ms)) throw new Error("Enter a valid date & time.");
     return Math.floor(ms / 1000);
   };
 
-  // tick every second so countdown updates live
+  function fmtCountdown(ts: bigint, refSec: number) {
+    if (ts === 0n) return { label: "—", isFuture: true };
+    const target = Number(ts);
+    const diff = target - refSec; // seconds
+    const future = diff > 0;
+    let d = Math.abs(diff);
+    const days = Math.floor(d / 86400);
+    d -= days * 86400;
+    const hours = Math.floor(d / 3600);
+    d -= hours * 3600;
+    const mins = Math.floor(d / 60);
+    d -= mins * 60;
+    const secs = d;
+
+    const parts = [
+      days ? `${days}d` : null,
+      hours ? `${hours}h` : null,
+      mins ? `${mins}m` : null,
+      `${secs}s`,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return future
+      ? { label: `in ${parts}`, isFuture: true }
+      : { label: `ready (since ${parts})`, isFuture: false };
+  }
+
+  // Tick every second so countdown updates
   useEffect(() => {
     const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // signer
+  // Capture connected EOA (for actions)
   useEffect(() => {
     (async () => {
       try {
@@ -2656,35 +3102,66 @@ function OwnersView({
     })();
   }, []);
 
-  // load rows
+  // Load rows — owners first, enrich with module configs if code exists
   async function loadRows() {
-    if (
-      !readProvider ||
-      !ethers.isAddress(safeAddr) ||
-      !ethers.isAddress(moduleAddr)
-    ) {
-      setRows([]);
-      return;
+    try {
+      if (!readProvider || !ethers.isAddress(safeAddr)) {
+        setRows([]);
+        return;
+      }
+
+      // 1) Always fetch owners first
+      const owners = await getOwners(readProvider as any, safeAddr);
+      let base: Row[] = owners.map((o) => ({
+        owner: o,
+        beneficiary: ethers.ZeroAddress,
+        ts: 0n,
+      }));
+
+      // 2) Only attempt heirConfigs if module address has code
+      let hasModuleCode = false;
+      if (ethers.isAddress(moduleAddr)) {
+        const code = await (readProvider as any).getCode(moduleAddr);
+        hasModuleCode = !!code && code !== "0x";
+      }
+
+      if (hasModuleCode) {
+        const mod = new ethers.Contract(
+          moduleAddr,
+          HeirSafeModuleABI,
+          readProvider as any
+        );
+        base = await Promise.all(
+          base.map(async (r) => {
+            try {
+              const cfg = await mod.heirConfigs(r.owner);
+              return {
+                owner: r.owner,
+                beneficiary: (cfg.beneficiary as string) || ethers.ZeroAddress,
+                ts: BigInt(cfg.activationTime),
+              };
+            } catch (e) {
+              console.debug("heirConfigs failed for", r.owner, e);
+              return r; // keep owner row even if this call fails
+            }
+          })
+        );
+      }
+
+      setRows(base);
+    } catch (err) {
+      console.error("[OwnersView] loadRows error:", err);
+      // Keep last good rows if something transient fails
     }
-    const owners = await getOwners(readProvider as any, safeAddr);
-    const mod = new ethers.Contract(
-      moduleAddr,
-      HeirSafeModuleABI,
-      readProvider as any
-    );
-    const data = await Promise.all(
-      owners.map(async (o) => {
-        const cfg = await mod.heirConfigs(o);
-        return {
-          owner: o,
-          beneficiary: (cfg.beneficiary as string) || ethers.ZeroAddress,
-          ts: BigInt(cfg.activationTime),
-        };
-      })
-    );
-    setRows(data);
   }
+
+  // Fire load on mount and when deps change, plus poll every 30s
   useEffect(() => {
+    console.log("[OwnersView] effect fired", {
+      safeAddr,
+      moduleAddr,
+      hasProvider: !!readProvider,
+    });
     loadRows();
     const t = setInterval(loadRows, 30000);
     return () => clearInterval(t);
@@ -2706,9 +3183,9 @@ function OwnersView({
       const signer = await bp.getSigner();
       if ((await signer.getAddress()).toLowerCase() !== owner.toLowerCase())
         throw new Error(`Connect as owner ${owner}`);
-
       if (!ethers.isAddress(beneficiary))
         throw new Error("Invalid beneficiary");
+
       const ts = localInputToUtcSeconds(whenLocal);
       if (ts <= Math.floor(Date.now() / 1000))
         throw new Error("Activation must be in the future");
@@ -2751,36 +3228,6 @@ function OwnersView({
     }
   }
 
-  // helper to build "in 2d 3h 4m 5s" or "ready (since 1d 2h 3m)"
-  function fmtCountdown(ts: bigint): { label: string; isFuture: boolean } {
-    if (ts === 0n) return { label: "—", isFuture: true };
-    const target = Number(ts);
-    const diff = target - nowSec; // seconds
-    const future = diff > 0;
-    let d = Math.abs(diff);
-
-    const days = Math.floor(d / 86400);
-    d -= days * 86400;
-    const hours = Math.floor(d / 3600);
-    d -= hours * 3600;
-    const mins = Math.floor(d / 60);
-    d -= mins * 60;
-    const secs = d;
-
-    const parts = [
-      days ? `${days}d` : null,
-      hours ? `${hours}h` : null,
-      mins ? `${mins}m` : null,
-      `${secs}s`,
-    ]
-      .filter(Boolean)
-      .join(" ");
-
-    return future
-      ? { label: `in ${parts}`, isFuture: true }
-      : { label: `ready (since ${parts})`, isFuture: false };
-  }
-
   async function doRemove(owner: string) {
     try {
       if (!confirm("Remove beneficiary and activation time?")) return;
@@ -2793,7 +3240,15 @@ function OwnersView({
         throw new Error(`Connect as owner ${owner}`);
 
       const mod = new ethers.Contract(moduleAddr, HeirSafeModuleABI, signer);
-      const tx = await mod.setBeneficiary(ethers.ZeroAddress, 0);
+
+      // Prefer new removeBeneficiary(), fallback to setBeneficiary(0,0)
+      const fn = mod.interface.getFunction("removeBeneficiary", []);
+      let tx;
+      if (fn) {
+        tx = await mod.removeBeneficiary();
+      } else {
+        tx = await mod.setBeneficiary(ethers.ZeroAddress, 0);
+      }
       await tx.wait();
       await loadRows();
     } catch (e: any) {
@@ -2817,7 +3272,20 @@ function OwnersView({
       await tx.wait();
       await loadRows();
     } catch (e: any) {
-      alert(e?.reason || e?.message || String(e));
+      // If it looks like "Activation time not reached", re-poll and explain
+      try {
+        const b = await (readProvider as any).getBlock("latest");
+        if (b?.timestamp) setChainNow(Number(b.timestamp));
+      } catch {}
+
+      const msg = e?.reason || e?.message || String(e);
+      if (/Activation time not reached/i.test(msg)) {
+        alert(
+          "Activation time not reached on-chain yet. Please wait a few seconds and try again."
+        );
+      } else {
+        alert(msg);
+      }
     } finally {
       setBusyByOwner((m) => ({ ...m, [owner]: false }));
     }
@@ -2835,6 +3303,7 @@ function OwnersView({
             : `Network ${chainId} not supported`}
         </p>
       )}
+
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="text-left text-neutral-300">
@@ -2846,438 +3315,252 @@ function OwnersView({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
-              const rowBusy = !!busyByOwner[r.owner];
-              const nowSec = BigInt(Math.floor(Date.now() / 1000));
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="p-4 text-sm opacity-70">
+                  No owners found (or failed to load).
+                </td>
+              </tr>
+            ) : (
+              rows.map((r) => {
+                const rowBusy = !!busyByOwner[r.owner];
+                const nowB = BigInt(nowSec);
+                const isOwnerSigner =
+                  signerAddr &&
+                  signerAddr.toLowerCase() === r.owner.toLowerCase();
 
-              const isOwnerSigner =
-                signerAddr &&
-                signerAddr.toLowerCase() === r.owner.toLowerCase();
+                const signerIsBeneficiary =
+                  signerAddr &&
+                  r.beneficiary !== ethers.ZeroAddress &&
+                  signerAddr.toLowerCase() === r.beneficiary.toLowerCase();
 
-              const signerIsBeneficiary =
-                signerAddr &&
-                r.beneficiary !== ethers.ZeroAddress &&
-                signerAddr.toLowerCase() === r.beneficiary.toLowerCase();
+                const refSec = nowSec + chainOffset;
+                const claimReady = r.ts !== 0n && refSec >= Number(r.ts) + 30; // 30s safety buffer
 
-              const claimReady = r.ts !== 0n && nowSec >= r.ts;
+                const disableRowActions =
+                  !canWriteGlobally || !isOwnerSigner || rowBusy;
 
-              const disableRowActions =
-                !canWriteGlobally || !isOwnerSigner || rowBusy;
+                const disableClaim =
+                  !canWriteGlobally ||
+                  !signerIsBeneficiary ||
+                  !claimReady ||
+                  rowBusy;
 
-              const disableClaim =
-                !canWriteGlobally ||
-                !signerIsBeneficiary ||
-                !claimReady ||
-                rowBusy;
+                const showSet = r.beneficiary === ethers.ZeroAddress;
+                const showProlong = r.beneficiary !== ethers.ZeroAddress;
+                const showRemove = r.beneficiary !== ethers.ZeroAddress;
 
-              const showSet = r.beneficiary === ethers.ZeroAddress;
-              const showProlong = r.beneficiary !== ethers.ZeroAddress;
-              const showRemove = r.beneficiary !== ethers.ZeroAddress;
+                const isEditingRow = editing && editing.owner === r.owner;
 
-              const isEditingRow = editing && editing.owner === r.owner;
+                return (
+                  <>
+                    <tr
+                      key={r.owner}
+                      className="border-t border-neutral-800 align-top"
+                    >
+                      <td className="py-2 pr-4 break-all">
+                        <Address addr={r.owner} variant="ghost" />
+                      </td>
+                      <td className="py-2 pr-4 break-all">
+                        <Address addr={r.beneficiary} />
+                      </td>
+                      <td className="py-2 pr-4">
+                        {r.ts !== 0n &&
+                          (() => {
+                            const cd = fmtCountdown(r.ts, refSec);
+                            return (
+                              <span
+                                className={`text-xs mt-1 ${
+                                  cd.isFuture
+                                    ? "text-neutral-300"
+                                    : "text-emerald-300"
+                                }`}
+                              >
+                                {cd.label}
+                              </span>
+                            );
+                          })()}
+                      </td>
+                      <td className="py-2">
+                        <div className="flex flex-wrap gap-2">
+                          {showSet && (
+                            <button
+                              className="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
+                              onClick={() =>
+                                setEditing({
+                                  mode: "set",
+                                  owner: r.owner,
+                                  beneficiary: "",
+                                  dtLocal: "",
+                                })
+                              }
+                              disabled={disableRowActions}
+                              title={
+                                !enabled
+                                  ? "Module must be enabled"
+                                  : isSafeApp
+                                  ? "Disabled in Safe App"
+                                  : !isOwnerSigner
+                                  ? "Connect the owner’s wallet"
+                                  : undefined
+                              }
+                            >
+                              {rowBusy ? "…" : "Set"}
+                            </button>
+                          )}
+                          {showProlong && (
+                            <button
+                              className="px-2 py-1 rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-50"
+                              onClick={() =>
+                                setEditing({
+                                  mode: "prolong",
+                                  owner: r.owner,
+                                  beneficiary: r.beneficiary,
+                                  dtLocal: toLocalInputValue(r.ts) || "",
+                                })
+                              }
+                              disabled={disableRowActions}
+                            >
+                              {rowBusy ? "…" : "Prolong"}
+                            </button>
+                          )}
+                          {showRemove && (
+                            <button
+                              className="px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 disabled:opacity-50"
+                              onClick={() => doRemove(r.owner)}
+                              disabled={disableRowActions}
+                            >
+                              {rowBusy ? "…" : "Remove"}
+                            </button>
+                          )}
+                          {signerIsBeneficiary && (
+                            <button
+                              className="px-2 py-1 rounded bg-amber-700 hover:bg-amber-600 disabled:opacity-50"
+                              onClick={() => doClaim(r.owner)}
+                              disabled={disableClaim}
+                              title={
+                                !enabled
+                                  ? "Module must be enabled"
+                                  : isSafeApp
+                                  ? "Disabled in Safe App"
+                                  : !claimReady
+                                  ? `Activation at ${fmtUTC(r.ts)}`
+                                  : undefined
+                              }
+                            >
+                              {rowBusy
+                                ? "…"
+                                : claimReady
+                                ? "Claim"
+                                : "Claim (not yet)"}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
 
-              return (
-                <>
-                  <tr
-                    key={r.owner}
-                    className="border-t border-neutral-800 align-top"
-                  >
-                    <td className="py-2 pr-4 break-all">
-                      <Address addr={r.owner} />
-                    </td>
-                    <td className="py-2 pr-4 break-all">
-                      <Address addr={r.beneficiary} />
-                    </td>
-                    <td className="py-2 pr-4">
-                      <div className="flex flex-col">
-                        <span className="text-neutral-200">
-                          {fmtLocal(r.ts)}
-                        </span>
-                        <span className="text-xs opacity-70">
-                          UTC: {fmtUTC(r.ts)}
-                        </span>
-                        {r.ts !== 0n && (
-                          <span
-                            className={`text-xs mt-1 ${
-                              fmtCountdown(r.ts).isFuture
-                                ? "text-neutral-300"
-                                : "text-emerald-300"
-                            }`}
-                          >
-                            {fmtCountdown(r.ts).label}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2">
-                      <div className="flex flex-wrap gap-2">
-                        {showSet && (
-                          <button
-                            className="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
-                            onClick={() =>
-                              setEditing({
-                                mode: "set",
-                                owner: r.owner,
-                                beneficiary: "",
-                                dtLocal: "",
-                              })
-                            }
-                            disabled={disableRowActions}
-                            title={
-                              !enabled
-                                ? "Module must be enabled"
-                                : isSafeApp
-                                ? "Disabled in Safe App"
-                                : !isOwnerSigner
-                                ? "Connect the owner’s wallet"
-                                : undefined
-                            }
-                          >
-                            {rowBusy ? "…" : "Set"}
-                          </button>
-                        )}
-                        {showProlong && (
-                          <button
-                            className="px-2 py-1 rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-50"
-                            onClick={() =>
-                              setEditing({
-                                mode: "prolong",
-                                owner: r.owner,
-                                beneficiary: r.beneficiary,
-                                dtLocal: toLocalInputValue(r.ts) || "",
-                              })
-                            }
-                            disabled={disableRowActions}
-                          >
-                            {rowBusy ? "…" : "Prolong"}
-                          </button>
-                        )}
-                        {showRemove && (
-                          <button
-                            className="px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 disabled:opacity-50"
-                            onClick={() => doRemove(r.owner)}
-                            disabled={disableRowActions}
-                          >
-                            {rowBusy ? "…" : "Remove"}
-                          </button>
-                        )}
-                        {signerIsBeneficiary && (
-                          <button
-                            className="px-2 py-1 rounded bg-amber-700 hover:bg-amber-600 disabled:opacity-50"
-                            onClick={() => doClaim(r.owner)}
-                            disabled={disableClaim}
-                            title={
-                              !enabled
-                                ? "Module must be enabled"
-                                : isSafeApp
-                                ? "Disabled in Safe App"
-                                : !claimReady
-                                ? `Activation at ${fmtUTC(r.ts)}`
-                                : undefined
-                            }
-                          >
-                            {rowBusy
-                              ? "…"
-                              : claimReady
-                              ? "Claim"
-                              : "Claim (not yet)"}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-
-                  {isEditingRow && (
-                    <tr className="border-t border-neutral-800">
-                      <td colSpan={4} className="py-3">
-                        <div className="flex flex-wrap gap-3 items-end">
-                          {editing.mode === "set" && (
+                    {isEditingRow && (
+                      <tr className="border-t border-neutral-800">
+                        <td colSpan={4} className="py-3">
+                          <div className="flex flex-wrap gap-3 items-end">
+                            {editing.mode === "set" && (
+                              <div className="flex flex-col gap-1">
+                                <label className="text-xs opacity-70">
+                                  Beneficiary
+                                </label>
+                                <input
+                                  className="px-3 py-2 rounded bg-neutral-800 min-w-[24rem]"
+                                  placeholder="0x… beneficiary"
+                                  value={editing.beneficiary}
+                                  onChange={(e) =>
+                                    setEditing(
+                                      (st) =>
+                                        st && {
+                                          ...st,
+                                          beneficiary: e.target.value,
+                                        }
+                                    )
+                                  }
+                                />
+                              </div>
+                            )}
                             <div className="flex flex-col gap-1">
                               <label className="text-xs opacity-70">
-                                Beneficiary
+                                Activation (local)
                               </label>
                               <input
-                                className="px-3 py-2 rounded bg-neutral-800 min-w-[24rem]"
-                                placeholder="0x… beneficiary"
-                                value={editing.beneficiary}
+                                type="datetime-local"
+                                className="px-3 py-2 rounded bg-neutral-800"
+                                value={editing.dtLocal}
                                 onChange={(e) =>
                                   setEditing(
                                     (st) =>
-                                      st && {
-                                        ...st,
-                                        beneficiary: e.target.value,
-                                      }
+                                      st && { ...st, dtLocal: e.target.value }
                                   )
                                 }
                               />
                             </div>
-                          )}
-                          <div className="flex flex-col gap-1">
-                            <label className="text-xs opacity-70">
-                              Activation (local)
-                            </label>
-                            <input
-                              type="datetime-local"
-                              className="px-3 py-2 rounded bg-neutral-800"
-                              value={editing.dtLocal}
-                              onChange={(e) =>
-                                setEditing(
-                                  (st) =>
-                                    st && { ...st, dtLocal: e.target.value }
-                                )
-                              }
-                            />
-                          </div>
-                          <div className="flex gap-2">
-                            {editing.mode === "set" ? (
+                            <div className="flex gap-2">
+                              {editing.mode === "set" ? (
+                                <button
+                                  className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
+                                  onClick={() =>
+                                    doSet(
+                                      editing.owner,
+                                      editing.beneficiary,
+                                      editing.dtLocal
+                                    )
+                                  }
+                                  disabled={
+                                    !canWriteGlobally ||
+                                    !signerAddr ||
+                                    signerAddr.toLowerCase() !==
+                                      editing.owner.toLowerCase() ||
+                                    !editing.dtLocal ||
+                                    (editing.mode === "set" &&
+                                      !ethers.isAddress(editing.beneficiary))
+                                  }
+                                >
+                                  Save
+                                </button>
+                              ) : (
+                                <button
+                                  className="px-3 py-2 rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-50"
+                                  onClick={() =>
+                                    doProlong(editing.owner, editing.dtLocal)
+                                  }
+                                  disabled={
+                                    !canWriteGlobally ||
+                                    !signerAddr ||
+                                    signerAddr.toLowerCase() !==
+                                      editing.owner.toLowerCase() ||
+                                    !editing.dtLocal
+                                  }
+                                >
+                                  Save
+                                </button>
+                              )}
                               <button
-                                className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
-                                onClick={() =>
-                                  doSet(
-                                    editing.owner,
-                                    editing.beneficiary,
-                                    editing.dtLocal
-                                  )
-                                }
-                                disabled={
-                                  !canWriteGlobally ||
-                                  !signerAddr ||
-                                  signerAddr.toLowerCase() !==
-                                    editing.owner.toLowerCase() ||
-                                  !editing.dtLocal ||
-                                  (editing.mode === "set" &&
-                                    !ethers.isAddress(editing.beneficiary))
-                                }
+                                className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700"
+                                onClick={() => setEditing(null)}
                               >
-                                Save
+                                Cancel
                               </button>
-                            ) : (
-                              <button
-                                className="px-3 py-2 rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-50"
-                                onClick={() =>
-                                  doProlong(editing.owner, editing.dtLocal)
-                                }
-                                disabled={
-                                  !canWriteGlobally ||
-                                  !signerAddr ||
-                                  signerAddr.toLowerCase() !==
-                                    editing.owner.toLowerCase() ||
-                                  !editing.dtLocal
-                                }
-                              >
-                                Save
-                              </button>
-                            )}
-                            <button
-                              className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700"
-                              onClick={() => setEditing(null)}
-                            >
-                              Cancel
-                            </button>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </>
-              );
-            })}
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>
     </section>
   );
 }
-</file>
-
-<file path="src/index.css">
-@import "tailwindcss";
-
-/* Global */
-html, body, #root { height: 100%; }
-body { @apply bg-neutral-950 text-neutral-100 antialiased; }
-
-/* Reusable cards/buttons/table */
-.card { @apply p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800; }
-
-.btn { @apply px-3 py-2 rounded disabled:opacity-50; }
-.btn-primary   { @apply bg-emerald-700 hover:bg-emerald-600; }
-.btn-secondary { @apply bg-neutral-800 hover:bg-neutral-700; }
-.btn-info      { @apply bg-sky-700 hover:bg-sky-600; }
-.btn-danger    { @apply bg-rose-700 hover:bg-rose-600; }
-
-.table { @apply min-w-full text-sm; }
-.table thead th { @apply py-2 pr-4 font-medium text-neutral-300; }
-.table tbody td { @apply py-2 pr-4; }
-.table tr { @apply border-t border-neutral-800/70; }
-
-input[type="text"],
-input[type="datetime-local"] { @apply px-3 py-2 rounded bg-neutral-800; }
-
-/* Small code/kbd styling if you show hashes/addresses */
-code { @apply px-1.5 py-0.5 rounded bg-neutral-800/80 text-neutral-200; }
-
-/* ---------- HeirSafe background ---------- */
-.hs-backdrop {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: -1;
-  display: grid;
-  place-items: center;
-  overflow: clip;
-  background: radial-gradient(1200px 800px at 50% 60%, rgba(16,185,129,0.06), transparent 60%);
-}
-
-/* the logo container */
-.hs-backdrop__logo {
-  width: clamp(420px, 50vw, 760px);
-  opacity: 0.12;               /* keep it subtle */
-  filter: blur(0.3px) drop-shadow(0 10px 30px rgba(16,185,129,.25));
-  animation: hs-swing 22s ease-in-out infinite;
-  transform-origin: 50% 46%;
-}
-
-/* HeirSafe background animations */
-@keyframes hs-swing {
-  0%, 100% { transform: rotate(0deg) scale(1); }
-  25%      { transform: rotate(-33deg) scale(1.5); }
-  50%      { transform: rotate(0deg) scale(1); }
-  75%      { transform: rotate(33deg) scale(1.5); }
-}
-
-.hs-backdrop__logo {
-  /* ...existing styles... */
-  animation: hs-swing 24s ease-in-out infinite;
-  transform-origin: 50% 46%;
-  will-change: transform;
-}
-
-/* reduce motion = no animation */
-@media (prefers-reduced-motion: reduce) {
-  .hs-backdrop__logo { animation: none; }
-}
-</file>
-
-<file path="README.md">
-# HeirSafe UI
-
-A minimal, professional web UI for the **HeirSafe** Safe module.
-
-- 🧩 **HeirSafe Module**: lets each Safe owner set a **beneficiary** and an **activation time**. After that time, the beneficiary can **claim** and replace that owner’s address. No funds move; only the owner address changes.
-- 🔗 Module repo: https://github.com/AlexNa-Holdings/heirsafe-module  
-- 🔗 UI repo: https://github.com/AlexNa-Holdings/heirsafe-ui
-
----
-
-## Features
-
-- **Install / Enable Module**
-  - Predicts the module address from factory + salt
-  - Checks deployment & enablement
-  - If Safe threshold is **1** and you’re an owner, prepares and sends the **Enable Module** tx directly
-  - Otherwise shows clear, copy-ready steps and an “Open Safe UI” shortcut
-- **Owners & Heirs (inline)**
-  - Per owner: **set beneficiary + activation**, **prolong**, **remove**
-  - Local datetime picker → stored on-chain as **UTC seconds**
-  - Live **countdown** (Local + UTC + “ready in / since …”)
-  - If your connected address is a configured beneficiary and time has passed, you’ll see **Claim**
-- **Nice UX**
-  - Short, copyable addresses (`0x1234…abcd`) with tooltip and non-reflow “Copied” bubble
-  - Calm **Status** bar (info/warn/error/success)
-  - Remembers your last Safe (`localStorage`)
-  - Collapsible “What is the HeirSafe module?” intro (remembers state)
-  - Tasteful animated background/logo; respects `prefers-reduced-motion`
-  - Tailwind CSS styling
-
----
-
-## Configuration
-
-Create `.env.local`:
-
-```ini
-# Optional: pre-fill the Safe address input
-VITE_DEFAULT_SAFE=0xYourSafeAddress
-
-# Required: 32-byte salt to deterministically predict the module address
-# Must be 0x + 64 hex characters
-VITE_INSTALL_SALT=0x0000000000000000000000000000000000000000000000000000000000000000
-```
-
-> The factory address per chain is configured in code at `src/config/chains.ts`.
-
----
-
-## How It Works (high level)
-
-* **Predict**: compute the deterministic module address from `factory + safe + salt`.
-* **Check**: read code at the predicted address; inspect Safe’s enabled modules.
-* **Enable**:
-
-  * If `threshold === 1` and you are an owner, the app builds and sends the enable tx to your wallet.
-  * Otherwise, it shows Safe UI instructions and a shortcut button.
-* **Owners table**:
-
-  * Reads Safe owners.
-  * Reads `heirConfigs(owner)` (beneficiary, activationTime) from the module.
-  * Inline actions sign with your **EOA** (outside Safe App embedding).
-
----
-
-
-## Development Notes
-
-* **Tailwind CSS (PostCSS)**
-  If you see: “It looks like you're trying to use `tailwindcss` directly as a PostCSS plugin…”, install and configure:
-
-  ```bash
-  pnpm add -D @tailwindcss/postcss
-  ```
-
-  And ensure your PostCSS config uses `@tailwindcss/postcss`.
-
-* **Accessibility**
-  Background animations respect `prefers-reduced-motion`.
-
----
-
-## Troubleshooting
-
-* **“Factory not configured for chain X”**
-  Add/update the factory address in `src/config/chains.ts`.
-
-* **“Factory not deployed on this network”**
-  The configured factory address has no bytecode on the active chain—fix the address or switch networks.
-
-* **Enable flow didn’t auto-send**
-  Auto-send only when **threshold = 1** and your connected wallet is a Safe owner; otherwise follow the provided Safe UI steps.
-
----
-
-## Contributing
-
-PRs welcome! Please keep changes focused and consistent with the existing style (TypeScript, Tailwind). If you add networks, update `src/config/chains.ts` carefully.
-
----
-
-## License
-
-**GNU General Public License v3.0** — see [LICENSE](./LICENSE).
-
----
-
-## Author
-
-**Written by [Alex Na](https://x.com/AlexNa)**
-
-* Module: [https://github.com/AlexNa-Holdings/heirsafe-module](https://github.com/AlexNa-Holdings/heirsafe-module)
-* UI: [https://github.com/AlexNa-Holdings/heirsafe-ui](https://github.com/AlexNa-Holdings/heirsafe-ui)
-
-*(Optional) Built with assistance from GPT-5 Thinking.*
-
-```
-::contentReference[oaicite:0]{index=0}
 </file>
 
 </files>

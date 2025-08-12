@@ -391,7 +391,67 @@ function OwnersView({
     beneficiary: string; // only for "set"
     dtLocal: string; // YYYY-MM-DDTHH:mm
   }>(null);
-  const [nowSec, setNowSec] = useState<number>(Math.floor(Date.now() / 1000));
+
+  // ticks every second so the UI re-renders
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const id = setInterval(
+      () => setNowSec(Math.floor(Date.now() / 1000)),
+      1000
+    );
+    return () => clearInterval(id);
+  }, []);
+
+  // keep small offset = (chain latest block time) - (local time)
+  const [chainOffset, setChainOffset] = useState(0);
+  useEffect(() => {
+    if (!readProvider) return;
+    let stop = false;
+
+    const refresh = async () => {
+      try {
+        const latest = await (readProvider as any).getBlock("latest");
+        const chainTs = Number(
+          latest?.timestamp ?? Math.floor(Date.now() / 1000)
+        );
+        const localTs = Math.floor(Date.now() / 1000);
+        if (!stop) setChainOffset(chainTs - localTs);
+      } catch {
+        // ignore; we'll try again on next tick
+      }
+    };
+
+    refresh();
+    const id = setInterval(refresh, 30000); // refresh offset every 30s
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, [readProvider]);
+
+  // poll latest block time (every 5s)
+  useEffect(() => {
+    if (!readProvider) return;
+    let stop = false;
+
+    async function tick() {
+      try {
+        const b = await (readProvider as any).getBlock("latest");
+        if (!stop && b?.timestamp != null) {
+          setChainNow(Number(b.timestamp));
+        }
+      } catch {
+        // ignore transient RPC errors
+      }
+    }
+
+    tick();
+    const id = setInterval(tick, 5000);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, [readProvider]);
 
   // Helpers
   const fmtUTC = (ts: bigint) =>
@@ -411,10 +471,11 @@ function OwnersView({
     if (!Number.isFinite(ms)) throw new Error("Enter a valid date & time.");
     return Math.floor(ms / 1000);
   };
-  const fmtCountdown = (ts: bigint): { label: string; isFuture: boolean } => {
+
+  function fmtCountdown(ts: bigint, refSec: number) {
     if (ts === 0n) return { label: "—", isFuture: true };
     const target = Number(ts);
-    const diff = target - nowSec;
+    const diff = target - refSec; // seconds
     const future = diff > 0;
     let d = Math.abs(diff);
     const days = Math.floor(d / 86400);
@@ -424,6 +485,7 @@ function OwnersView({
     const mins = Math.floor(d / 60);
     d -= mins * 60;
     const secs = d;
+
     const parts = [
       days ? `${days}d` : null,
       hours ? `${hours}h` : null,
@@ -432,10 +494,11 @@ function OwnersView({
     ]
       .filter(Boolean)
       .join(" ");
+
     return future
       ? { label: `in ${parts}`, isFuture: true }
       : { label: `ready (since ${parts})`, isFuture: false };
-  };
+  }
 
   // Tick every second so countdown updates
   useEffect(() => {
@@ -628,7 +691,20 @@ function OwnersView({
       await tx.wait();
       await loadRows();
     } catch (e: any) {
-      alert(e?.reason || e?.message || String(e));
+      // If it looks like "Activation time not reached", re-poll and explain
+      try {
+        const b = await (readProvider as any).getBlock("latest");
+        if (b?.timestamp) setChainNow(Number(b.timestamp));
+      } catch {}
+
+      const msg = e?.reason || e?.message || String(e);
+      if (/Activation time not reached/i.test(msg)) {
+        alert(
+          "Activation time not reached on-chain yet. Please wait a few seconds and try again."
+        );
+      } else {
+        alert(msg);
+      }
     } finally {
       setBusyByOwner((m) => ({ ...m, [owner]: false }));
     }
@@ -677,7 +753,8 @@ function OwnersView({
                   r.beneficiary !== ethers.ZeroAddress &&
                   signerAddr.toLowerCase() === r.beneficiary.toLowerCase();
 
-                const claimReady = r.ts !== 0n && nowB >= r.ts;
+                const refSec = nowSec + chainOffset;
+                const claimReady = r.ts !== 0n && refSec >= Number(r.ts) + 30; // 30s safety buffer
 
                 const disableRowActions =
                   !canWriteGlobally || !isOwnerSigner || rowBusy;
@@ -707,27 +784,21 @@ function OwnersView({
                         <Address addr={r.beneficiary} />
                       </td>
                       <td className="py-2 pr-4">
-                        {r.ts === 0n ? (
-                          <span className="text-neutral-400">—</span>
-                        ) : (
-                          <div className="flex flex-col">
-                            <span className="text-neutral-200">
-                              {fmtLocal(r.ts)}
-                            </span>
-                            <span className="text-xs opacity-70">
-                              UTC: {fmtUTC(r.ts)}
-                            </span>
-                            <span
-                              className={`text-xs mt-1 ${
-                                fmtCountdown(r.ts).isFuture
-                                  ? "text-neutral-300"
-                                  : "text-emerald-300"
-                              }`}
-                            >
-                              {fmtCountdown(r.ts).label}
-                            </span>
-                          </div>
-                        )}
+                        {r.ts !== 0n &&
+                          (() => {
+                            const cd = fmtCountdown(r.ts, refSec);
+                            return (
+                              <span
+                                className={`text-xs mt-1 ${
+                                  cd.isFuture
+                                    ? "text-neutral-300"
+                                    : "text-emerald-300"
+                                }`}
+                              >
+                                {cd.label}
+                              </span>
+                            );
+                          })()}
                       </td>
                       <td className="py-2">
                         <div className="flex flex-wrap gap-2">
