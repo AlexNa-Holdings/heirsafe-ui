@@ -14,7 +14,6 @@ import OwnersView from "./components/OwnersView";
 
 // ABIs & helpers
 import { useSafeApp } from "./lib/safeApp";
-import { getOwners } from "./lib/safeHelpers";
 import { CHAINS, getFactoryAddress } from "./config/chains";
 import {
   predictModuleForSafe,
@@ -39,7 +38,7 @@ export default function App() {
 
   // pick a default chain for public read (use the one you host on)
   const DEFAULT_CHAIN_ID = 11155111; // Sepolia
-  const FALLBACK_RPC = CHAINS[DEFAULT_CHAIN_ID]?.addChainParams?.rpcUrls?.[0] || "";
+  const FALLBACK_RPC = CHAINS[DEFAULT_CHAIN_ID]?.addChainParams?.rpcUrls[0];
 
   // a read provider for *reads only*
   const readProvider = useMemo(() => {
@@ -51,9 +50,7 @@ export default function App() {
   // Safe address (prefill from env / localStorage / Safe App)
   const [safeAddr, setSafeAddr] = useState<string>(() => {
     try {
-      return localStorage.getItem(LS_SAFE_KEY) ||
-        DEFAULT_SAFE ||
-        "";
+      return localStorage.getItem(LS_SAFE_KEY) || DEFAULT_SAFE || "";
     } catch {
       return DEFAULT_SAFE || "";
     }
@@ -106,7 +103,8 @@ export default function App() {
   }, [readProvider, safeEip1193]);
 
   // factory & readiness for this chain
-  const factoryFromChain = chainId != null ? getFactoryAddress(chainId) : undefined;
+  const factoryFromChain =
+    chainId != null ? getFactoryAddress(chainId) : undefined;
   const normalizedFactory =
     factoryFromChain && ethers.isAddress(factoryFromChain)
       ? ethers.getAddress(factoryFromChain)
@@ -119,27 +117,13 @@ export default function App() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [status, setStatus] = useState<string>("");
 
-  // owners (used for quick count; actual per-owner configs are in OwnersView)
-  const [owners, setOwners] = useState<string[]>([]);
-
-  async function refreshOwners() {
-    try {
-      if (!readProvider || !ethers.isAddress(safeAddr)) {
-        setOwners([]);
-        return;
-      }
-      const list = await getOwners(readProvider as any, safeAddr);
-      setOwners(list);
-    } catch {
-      setOwners([]);
-    }
-  }
-
   async function refreshInstallState() {
     try {
       if (!readProvider) throw new Error("No provider");
-      if (!ethers.isAddress(safeAddr)) throw new Error("Enter a valid Safe address");
-      if (!normalizedFactory) throw new Error("Factory not configured for this chain");
+      if (!ethers.isAddress(safeAddr))
+        throw new Error("Enter a valid Safe address");
+      if (!normalizedFactory)
+        throw new Error("Factory not configured for this chain");
 
       const saltHex =
         (import.meta.env.VITE_INSTALL_SALT as string) || "0x" + "00".repeat(32);
@@ -189,14 +173,13 @@ export default function App() {
     if (!readProvider || !readyForChain) return;
     (async () => {
       await refreshInstallState();
-      await refreshOwners();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [safeAddr, readProvider, readyForChain]);
 
   return (
     <div className="relative min-h-screen text-neutral-100 bg-neutral-950">
-           {/* Background: heart-on-shield */}
+      {/* Background: heart-on-shield */}
       <div className="hs-backdrop" aria-hidden="true">
         <img src="/logo-heirsafe.svg" alt="" className="hs-backdrop__logo" />
         <div className="hs-noise" />
@@ -207,8 +190,13 @@ export default function App() {
         <ModuleIntro />
 
         {/* Configuration / prediction */}
-        <section className="rounded-2xl bg-neutral-900/70 border border-neutral-800 p-4 space-y-3" aria-labelledby="install-title">
-          <h2 id="install-title" className="font-semibold">Module & Install</h2>
+        <section
+          className="rounded-2xl bg-neutral-900/70 border border-neutral-800 p-4 space-y-3"
+          aria-labelledby="install-title"
+        >
+          <h2 id="install-title" className="font-semibold">
+            Module & Install
+          </h2>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
@@ -221,7 +209,6 @@ export default function App() {
               className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700"
               onClick={() => {
                 refreshInstallState();
-                refreshOwners();
               }}
             >
               Refresh
@@ -235,7 +222,9 @@ export default function App() {
               <span>Network: Unknown</span>
             )}
             {enabled === false ? (
-              <span className="ml-2 text-amber-300">· Module deployed but not enabled</span>
+              <span className="ml-2 text-amber-300">
+                · Module deployed but not enabled
+              </span>
             ) : null}
           </div>
 
@@ -253,7 +242,6 @@ export default function App() {
                 isEnabled={Boolean(enabled)}
                 onChanged={async () => {
                   await refreshInstallState();
-                  await refreshOwners();
                 }}
               />
             )}

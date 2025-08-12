@@ -53,7 +53,8 @@ function Countdown({
   const showDays = days > 0;
   const showHours = showDays || hours > 0; // hide 00h if <1h and no days
 
-  const box = "px-2 py-1 rounded-md border font-mono tabular-nums text-xs leading-none";
+  const box =
+    "px-2 py-1 rounded-md border font-mono tabular-nums text-xs leading-none";
   const tone = "border-neutral-700 bg-neutral-800/70 text-neutral-200";
 
   const Unit = ({
@@ -178,19 +179,42 @@ export default function OwnersView({
     return Math.floor(ms / 1000);
   };
 
-  // Capture connected EOA (for actions)
+  // Capture connected EOA (for actions) + react to wallet events
   useEffect(() => {
-    (async () => {
+    const eth = (window as any).ethereum;
+    if (!eth) {
+      setSignerAddr("");
+      return;
+    }
+
+    let cancelled = false;
+
+    const updateFromWallet = async () => {
       try {
-        const eth = (window as any).ethereum;
-        if (!eth) return setSignerAddr("");
         const bp = new ethers.BrowserProvider(eth);
         const s = await bp.getSigner().catch(() => null);
-        setSignerAddr(s ? await s.getAddress() : "");
+        const addr = s ? await s.getAddress() : "";
+        if (!cancelled) setSignerAddr(addr);
       } catch {
-        setSignerAddr("");
+        if (!cancelled) setSignerAddr("");
       }
-    })();
+    };
+
+    // initial read
+    updateFromWallet();
+
+    // react to account / chain changes
+    const onAccountsChanged = (_accs: string[]) => updateFromWallet();
+    const onChainChanged = (_chainId: string) => updateFromWallet();
+
+    eth.on?.("accountsChanged", onAccountsChanged);
+    eth.on?.("chainChanged", onChainChanged);
+
+    return () => {
+      cancelled = true;
+      eth.removeListener?.("accountsChanged", onAccountsChanged);
+      eth.removeListener?.("chainChanged", onChainChanged);
+    };
   }, []);
 
   // Load rows — owners first, enrich with module configs if code exists
@@ -217,7 +241,11 @@ export default function OwnersView({
       }
 
       if (hasModuleCode) {
-        const mod = new ethers.Contract(moduleAddr, HeirSafeModuleABI, readProvider as any);
+        const mod = new ethers.Contract(
+          moduleAddr,
+          HeirSafeModuleABI,
+          readProvider as any
+        );
         base = await Promise.all(
           base.map(async (r) => {
             try {
