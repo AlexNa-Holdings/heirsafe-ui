@@ -4,5 +4,5 @@
   "iconPath": "logo-heirsafe.svg",
   "safeAppUrl": "https://heirsafe.app/",
   "providedBy": { "name": "HeirSafe" },
-  "chains": [11155111]
+  "chains": [11155111, 1, 369]
 }

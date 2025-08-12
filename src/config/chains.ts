@@ -16,6 +16,44 @@ export type ChainConfig = {
 };
 
 export const CHAINS: Record<number, ChainConfig> = {
+  // ────────────────────────────────
+  // Ethereum mainnet
+  // ────────────────────────────────
+  1: {
+    id: 1,
+    name: "Ethereum",
+    factory: "0xe1fad32178053fF29E68b21D965D482d94Bb0394", 
+    txService: "https://safe-transaction-mainnet.safe.global",
+    addChainParams: {
+      chainId: "0x1",
+      chainName: "Ethereum",
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      rpcUrls: ["https://eth.llamarpc.com", "https://rpc.ankr.com/eth"],
+      blockExplorerUrls: ["https://etherscan.io"],
+    },
+  },
+
+  // ────────────────────────────────
+  // PulseChain mainnet
+  // ────────────────────────────────
+  369: {
+    id: 369,
+    name: "PulseChain",
+    factory: "0xe1fad32178053fF29E68b21D965D482d94Bb0394", 
+    addChainParams: {
+      chainId: "0x171",
+      chainName: "PulseChain",
+      nativeCurrency: { name: "Pulse", symbol: "PLS", decimals: 18 },
+      rpcUrls: [
+        "https://rpc.pulsechain.com",
+        "https://pulsechain.publicnode.com",
+      ],
+      blockExplorerUrls: ["https://scan.pulsechain.com"],
+    },
+  },
+  // ────────────────────────────────
+  // Sepolia (test)
+  // ────────────────────────────────
   11155111: {
     id: 11155111,
     name: "Sepolia (test)",
@@ -29,8 +67,9 @@ export const CHAINS: Record<number, ChainConfig> = {
       blockExplorerUrls: ["https://sepolia.etherscan.io"],
     },
   },
+
   // Add more networks as you deploy:
-  // 1: { ... }, 8453: { ... }, 42161: { ... }, etc.
+  // 8453: { ... }, 42161: { ... }, etc.
 };
 
 export function getFactoryAddress(chainId: number): string | null {
