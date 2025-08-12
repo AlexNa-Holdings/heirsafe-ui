@@ -24,6 +24,27 @@ import {
 // env
 const DEFAULT_SAFE = (import.meta.env.VITE_DEFAULT_SAFE || "").trim();
 const LS_SAFE_KEY = "heirsafe:lastSafe";
+const ENV_FALLBACK = (import.meta.env.VITE_FALLBACK_RPC || "").trim();
+
+/** Robust RPC picker from CHAINS shape (+ env override). */
+function pickFallbackRpc(defaultChainId: number): string | null {
+  if (ENV_FALLBACK) return ENV_FALLBACK;
+
+  const c = CHAINS?.[defaultChainId] as any;
+  if (!c) return null;
+
+  // viem-like shape
+  if (c.rpcUrls?.default?.http?.length) return c.rpcUrls.default.http[0];
+  if (c.rpcUrls?.public?.http?.length) return c.rpcUrls.public.http[0];
+
+  // array or string variants
+  if (Array.isArray(c.rpcUrls) && c.rpcUrls.length) return c.rpcUrls[0];
+  if (typeof c.rpcUrls === "string" && c.rpcUrls) return c.rpcUrls;
+  if (typeof c.rpcUrl === "string" && c.rpcUrl) return c.rpcUrl;
+  if (typeof c.rpc === "string" && c.rpc) return c.rpc;
+
+  return null;
+}
 
 export default function App() {
   // Safe App context (iframe)
@@ -38,7 +59,7 @@ export default function App() {
 
   // pick a default chain for public read (use the one you host on)
   const DEFAULT_CHAIN_ID = 11155111; // Sepolia
-  const FALLBACK_RPC = CHAINS[DEFAULT_CHAIN_ID]?.addChainParams?.rpcUrls?.[0] || "";
+  const FALLBACK_RPC = pickFallbackRpc(DEFAULT_CHAIN_ID);
 
   // a read provider for *reads only*
   const readProvider = useMemo(() => {
@@ -56,7 +77,7 @@ export default function App() {
     }
   });
 
-  // keep Safe App safe address in sync
+  // keep Safe App safe address in sync (auto-fill + persist)
   useEffect(() => {
     if (isSafeApp && safe?.safeAddress) {
       setSafeAddr(safe.safeAddress);
@@ -66,7 +87,7 @@ export default function App() {
     }
   }, [isSafeApp, safe]);
 
-  // persist last used safe
+  // persist last used safe (when not in Safe App too)
   useEffect(() => {
     try {
       if (ethers.isAddress(safeAddr)) {
@@ -173,6 +194,8 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [safeAddr, readProvider, readyForChain]);
 
+  const isInSafe = isSafeApp && !!safe?.safeAddress;
+
   return (
     <div className="relative min-h-screen text-neutral-100 bg-neutral-950">
       {/* Background: heart-on-shield */}
@@ -193,13 +216,23 @@ export default function App() {
         >
           <h2 id="install-title" className="font-semibold">Module & Install</h2>
 
+          {/* Safe address control: auto-filled & read-only inside Safe */}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input
-              className="w-full sm:max-w-xl px-3 py-2 rounded bg-neutral-800"
-              placeholder="0x… Safe address"
-              value={safeAddr}
-              onChange={(e) => setSafeAddr(e.target.value.trim())}
-            />
+            <div className="flex-1 flex items-center gap-2">
+              <input
+                className={`w-full sm:max-w-xl px-3 py-2 rounded bg-neutral-800 ${isInSafe ? "opacity-70 cursor-not-allowed" : ""}`}
+                placeholder="0x… Safe address"
+                value={safeAddr}
+                onChange={(e) => setSafeAddr(e.target.value.trim())}
+                readOnly={isInSafe}
+                title={isInSafe ? "Using Safe selected in the Safe app" : "Enter a Safe address"}
+              />
+              {isInSafe && (
+                <span className="text-xs text-neutral-300 hidden sm:inline">
+                  from Safe context
+                </span>
+              )}
+            </div>
             <button
               className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700"
               onClick={() => {
