@@ -38,7 +38,7 @@ export default function App() {
 
   // pick a default chain for public read (use the one you host on)
   const DEFAULT_CHAIN_ID = 11155111; // Sepolia
-  const FALLBACK_RPC = CHAINS[DEFAULT_CHAIN_ID]?.addChainParams?.rpcUrls[0];
+  const FALLBACK_RPC = CHAINS[DEFAULT_CHAIN_ID]?.addChainParams?.rpcUrls?.[0] || "";
 
   // a read provider for *reads only*
   const readProvider = useMemo(() => {
@@ -103,8 +103,7 @@ export default function App() {
   }, [readProvider, safeEip1193]);
 
   // factory & readiness for this chain
-  const factoryFromChain =
-    chainId != null ? getFactoryAddress(chainId) : undefined;
+  const factoryFromChain = chainId != null ? getFactoryAddress(chainId) : undefined;
   const normalizedFactory =
     factoryFromChain && ethers.isAddress(factoryFromChain)
       ? ethers.getAddress(factoryFromChain)
@@ -120,10 +119,8 @@ export default function App() {
   async function refreshInstallState() {
     try {
       if (!readProvider) throw new Error("No provider");
-      if (!ethers.isAddress(safeAddr))
-        throw new Error("Enter a valid Safe address");
-      if (!normalizedFactory)
-        throw new Error("Factory not configured for this chain");
+      if (!ethers.isAddress(safeAddr)) throw new Error("Enter a valid Safe address");
+      if (!normalizedFactory) throw new Error("Factory not configured for this chain");
 
       const saltHex =
         (import.meta.env.VITE_INSTALL_SALT as string) || "0x" + "00".repeat(32);
@@ -133,8 +130,7 @@ export default function App() {
 
       // ensure the factory exists on this chain
       const code = await (readProvider as any).getCode(normalizedFactory);
-      if (!code || code === "0x")
-        throw new Error("Factory not deployed on this network");
+      if (!code || code === "0x") throw new Error("Factory not deployed on this network");
 
       const addr = await predictModuleForSafe(
         readProvider as any,
@@ -184,6 +180,7 @@ export default function App() {
         <img src="/logo-heirsafe.svg" alt="" className="hs-backdrop__logo" />
         <div className="hs-noise" />
       </div>
+
       <AppHeader safeAddr={safeAddr} />
 
       <main className="relative z-10 max-w-5xl mx-auto px-4 pt-6 pb-12 space-y-6">
@@ -194,9 +191,7 @@ export default function App() {
           className="rounded-2xl bg-neutral-900/70 border border-neutral-800 p-4 space-y-3"
           aria-labelledby="install-title"
         >
-          <h2 id="install-title" className="font-semibold">
-            Module & Install
-          </h2>
+          <h2 id="install-title" className="font-semibold">Module & Install</h2>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
@@ -222,9 +217,7 @@ export default function App() {
               <span>Network: Unknown</span>
             )}
             {enabled === false ? (
-              <span className="ml-2 text-amber-300">
-                · Module deployed but not enabled
-              </span>
+              <span className="ml-2 text-amber-300">· Module deployed but not enabled</span>
             ) : null}
           </div>
 

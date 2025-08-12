@@ -1,0 +1,8 @@
+{
+  "name": "HeirSafe",
+  "description": "Heir module helper: set/prolong/remove beneficiary and claim when available.",
+  "iconPath": "logo-heirsafe.svg",
+  "safeAppUrl": "https://heirsafe.app/",
+  "providedBy": { "name": "HeirSafe" },
+  "chains": [11155111]
+}
