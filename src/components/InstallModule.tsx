@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ethers } from "ethers";
 import { useSafeApp } from "../lib/safeApp";
-
+import Address from "./Address";
+import { HeirSafeModuleFactoryABI } from "../abi/HeirSafeModuleFactory";
 
 type Props = {
   safeAddr: string;
@@ -12,6 +13,14 @@ type Props = {
   isEnabled: boolean;
   onChanged?: () => Promise<void> | void;
 };
+
+const SafeABI = [
+  "function getThreshold() view returns (uint256)",
+  "function isOwner(address) view returns (bool)",
+  "function getNonce() view returns (uint256)",
+  "function getTransactionHash(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 _nonce) view returns (bytes32)",
+  "function execTransaction(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,bytes signatures) returns (bool)",
+];
 
 export default function InstallModule({
   safeAddr,
@@ -29,27 +38,71 @@ export default function InstallModule({
   const saltHex =
     (import.meta.env.VITE_INSTALL_SALT as string) || "0x" + "00".repeat(32);
 
-  const safeUrl = `https://app.safe.global/home?safe=${safeAddr}`;
+  // --------- helpers ---------
 
-  // ---------------- SAFE APP (iframe) ----------------
+  async function getChainPrefix(): Promise<string> {
+    try {
+      const net = await readProvider.getNetwork();
+      const id = Number(net.chainId);
+      // minimal mapping (extend as you add chains)
+      if (id === 1) return "eth:";
+      if (id === 11155111) return "sep:";
+      return `${id}:`;
+    } catch {
+      return "";
+    }
+  }
+
+  async function openSafe() {
+    const pref = await getChainPrefix();
+    const url = `https://app.safe.global/home?safe=${pref}${safeAddr}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  async function readThreshold(): Promise<number> {
+    const safe = new ethers.Contract(safeAddr, SafeABI, readProvider as any);
+    const t = await safe.getThreshold();
+    return Number(t);
+  }
+
+  async function signerAndIsOwner(): Promise<{
+    signer: ethers.Signer;
+    signerAddr: string;
+    isOwner: boolean;
+  }> {
+    const eth = (window as any).ethereum;
+    if (!eth) throw new Error("No wallet detected");
+    const bp = new ethers.BrowserProvider(eth);
+    const signer = await bp.getSigner();
+    const signerAddr = await signer.getAddress();
+    const safe = new ethers.Contract(safeAddr, SafeABI, readProvider as any);
+    const yes = await safe.isOwner(signerAddr);
+    return { signer, signerAddr, isOwner: yes };
+  }
+
+  // --------- SAFE APP (iframe) ---------
 
   async function installInsideSafe() {
     if (!sdk) return;
     setBusy(true);
     try {
-      const iface = new ethers.Interface([
-        "function deployModule(address,address,bytes32) external",
-      ]);
+      // Encode the correct factory function from your ABI
+      const iface = new ethers.Interface(HeirSafeModuleFactoryABI);
+      let data: string;
+      try {
+        iface.getFunction("deployForSafe");
+        data = iface.encodeFunctionData("deployForSafe", [safeAddr, saltHex]);
+      } catch {
+        iface.getFunction("deploy");
+        data = iface.encodeFunctionData("deploy", [safeAddr, saltHex]);
+      }
+
       await sdk.txs.send({
         txs: [
           {
             to: factoryAddr,
             value: "0",
-            data: iface.encodeFunctionData("deployModule", [
-              safeAddr,
-              predictedModule,
-              saltHex,
-            ]),
+            data,
           },
         ],
       });
@@ -63,15 +116,14 @@ export default function InstallModule({
     if (!sdk) return;
     setBusy(true);
     try {
-      const iface = new ethers.Interface([
-        "function enableModule(address) external",
-      ]);
+      const iface = new ethers.Interface(["function enableModule(address)"]);
+      const data = iface.encodeFunctionData("enableModule", [predictedModule]);
       await sdk.txs.send({
         txs: [
           {
             to: safeAddr,
             value: "0",
-            data: iface.encodeFunctionData("enableModule", [predictedModule]),
+            data,
           },
         ],
       });
@@ -81,110 +133,149 @@ export default function InstallModule({
     }
   }
 
-  // ---------------- STANDALONE (normal website) ----------------
+  // --------- STANDALONE (normal website) ---------
 
+  // Deploy:
+  // - threshold > 1 → instruct to do it from Safe UI (multisig)
+  // - threshold == 1 → one-click deploy from wallet (permissionless)
   async function deployStandalone() {
-    setBusy(true);
     try {
-      const signer = await (readProvider as ethers.BrowserProvider).getSigner();
-      const iface = new ethers.Interface([
-        "function deployModule(address,address,bytes32) external",
-      ]);
-      const tx = await signer.sendTransaction({
-        to: factoryAddr,
-        data: iface.encodeFunctionData("deployModule", [
-          safeAddr,
-          predictedModule,
-          saltHex,
-        ]),
-      });
-      await tx.wait();
-      await Promise.resolve(onChanged?.());
-    } finally {
-      setBusy(false);
-    }
-  }
+      if (!ethers.isAddress(factoryAddr)) throw new Error("Bad factory");
+      if (!ethers.isAddress(safeAddr)) throw new Error("Bad safe");
+      if (!/^0x[0-9a-fA-F]{64}$/.test(saltHex)) {
+        throw new Error("VITE_INSTALL_SALT must be 0x + 64 hex chars");
+      }
 
-  function openSafe() {
-    window.open(safeUrl, "_blank", "noopener,noreferrer");
-  }
-
-  // If threshold==1 and signer is an owner -> execute directly with pre-validated signature (no “Sign Text”).
-  // Else -> show instructions (and keep Open Safe UI button visible).
-  async function enableStandaloneSmart() {
-    try {
-      setInstructions("");
-      setBusy(true);
-
-      const browser = readProvider as ethers.BrowserProvider;
-      const signer = await browser.getSigner();
-      const signerAddr = (await signer.getAddress()).toLowerCase();
-
-      const SAFE_ABI = [
-        "function getOwners() view returns (address[])",
-        "function getThreshold() view returns (uint256)",
-        "function nonce() view returns (uint256)",
-        "function execTransaction(address,uint256,bytes,uint8,uint256,uint256,uint256,address,address,bytes) returns (bool)",
-      ];
-      const safe = new ethers.Contract(safeAddr, SAFE_ABI, signer);
-
-      const [owners, thresholdBn] = await Promise.all([
-        safe.getOwners(),
-        safe.getThreshold(),
-      ]);
-      const isOwner = owners.map((o: string) => o.toLowerCase()).includes(signerAddr);
-      const threshold = BigInt(thresholdBn.toString());
-
-      if (threshold === 1n && isOwner) {
-        const MM_IFACE = new ethers.Interface(["function enableModule(address)"]);
-        const to = safeAddr;
-        const value = 0;
-        const data = MM_IFACE.encodeFunctionData("enableModule", [predictedModule]);
-        const operation = 0; // CALL
-        const safeTxGas = 0;
-        const baseGas = 0;
-        const gasPrice = 0;
-        const gasToken = ethers.ZeroAddress;
-        const refundReceiver = ethers.ZeroAddress;
-
-        // Pre-validated signature: r(owner) || s(0) || v(1)
-        const rOwner = ethers.zeroPadValue(await signer.getAddress(), 32);
-        const sZero = ethers.ZeroHash;
-        const vOne = ethers.toBeHex(1, 1);
-        const preValidatedSig = ethers.concat([rOwner, sZero, vOne]);
-
-        const tx = await safe.execTransaction(
-          to,
-          value,
-          data,
-          operation,
-          safeTxGas,
-          baseGas,
-          gasPrice,
-          gasToken,
-          refundReceiver,
-          preValidatedSig
+      const t = await readThreshold();
+      if (t > 1) {
+        const pref = await getChainPrefix();
+        setInstructions(
+          [
+            "Deploy requires a Safe transaction:",
+            "1) Open Safe UI → New transaction → Contract interaction.",
+            `2) Contract: ${factoryAddr}`,
+            "3) Function: deployForSafe(address, bytes32) (or deploy(address, bytes32))",
+            `4) Params:\n   - safe = ${safeAddr}\n   - salt = ${saltHex}`,
+            `5) Review and submit. Collect required signatures (${t}-of-owners).\n`,
+            `Safe link: https://app.safe.global/home?safe=${pref}${safeAddr}`,
+          ].join("\n")
         );
-        await tx.wait();
-        await Promise.resolve(onChanged?.());
         return;
       }
 
-      // Multisig or non-owner: show instructions (and keep the Open Safe UI button)
-      setInstructions(
-        [
-          "Enable requires a Safe transaction:",
-          "1) Click “Open Safe UI”.",
-          "2) New transaction → Contract interaction.",
-          `3) Contract: ${safeAddr}`,
-          "4) Function: enableModule(address)",
-          `5) Parameter: ${predictedModule}`,
-          "6) Review and submit. Collect required owner signatures.",
-          "",
-        ].join("\n")
+      // don’t try to deploy if code already exists at predicted
+      const code = await (readProvider as any).getCode(predictedModule);
+      if (code && code !== "0x") {
+        alert("Module already deployed at the predicted address.");
+        return;
+      }
+
+      const { signer } = await signerAndIsOwner();
+
+      // call the factory directly using your ABI
+      const factory = new ethers.Contract(
+        factoryAddr,
+        HeirSafeModuleFactoryABI,
+        signer
       );
+
+      let tx;
+      try {
+        factory.interface.getFunction("deployForSafe");
+        tx = await factory.deployForSafe(safeAddr, saltHex);
+      } catch {
+        factory.interface.getFunction("deploy");
+        tx = await factory.deploy(safeAddr, saltHex);
+      }
+
+      await tx.wait();
+      await onChanged?.();
     } catch (e: any) {
-      setInstructions(e?.reason || e?.message || String(e));
+      alert(e?.reason || e?.message || String(e));
+    }
+  }
+
+  // Enable:
+  // - threshold > 1 or not owner → show Safe UI instructions
+  // - threshold == 1 and signer is owner → build & execute Safe tx locally
+  async function enableStandaloneSmart() {
+    setBusy(true);
+    try {
+      const t = await readThreshold();
+      const { signer, signerAddr, isOwner } = await signerAndIsOwner();
+
+      if (t !== 1 || !isOwner) {
+        const pref = await getChainPrefix();
+        setInstructions(
+          [
+            "Enable requires a Safe transaction:",
+            "1) Open Safe UI → New transaction → Contract interaction.",
+            `2) Contract: ${safeAddr}`,
+            "3) Function: enableModule(address)",
+            `4) Param: module = ${predictedModule}`,
+            `5) Review and submit. Collect required signatures (${t}-of-owners).\n`,
+            `You are connected as ${signerAddr}${!isOwner ? " (not a Safe owner)" : ""}.`,
+            `Safe link: https://app.safe.global/home?safe=${pref}${safeAddr}`,
+          ].join("\n")
+        );
+        return;
+      }
+
+      // threshold == 1 and signer is owner → execute Safe tx directly
+      const safeRead = new ethers.Contract(safeAddr, SafeABI, readProvider);
+      const safeWrite = new ethers.Contract(safeAddr, SafeABI, signer);
+
+      const enableIface = new ethers.Interface([
+        "function enableModule(address)",
+      ]);
+      const data = enableIface.encodeFunctionData("enableModule", [
+        predictedModule,
+      ]);
+
+      const to = safeAddr;
+      const value = 0;
+      const operation = 0; // CALL
+      const safeTxGas = 0;
+      const baseGas = 0;
+      const gasPrice = 0;
+      const gasToken = ethers.ZeroAddress;
+      const refundReceiver = ethers.ZeroAddress;
+      const nonce = await safeRead.getNonce();
+
+      // Safe’s on-chain hash (works for v1.3.x)
+      const txHash = await safeRead.getTransactionHash(
+        to,
+        value,
+        data,
+        operation,
+        safeTxGas,
+        baseGas,
+        gasPrice,
+        gasToken,
+        refundReceiver,
+        nonce
+      );
+
+      // ECDSA sign the hash
+      const sig = await signer.signMessage(ethers.getBytes(txHash));
+
+      // Execute
+      const tx = await safeWrite.execTransaction(
+        to,
+        value,
+        data,
+        operation,
+        safeTxGas,
+        baseGas,
+        gasPrice,
+        gasToken,
+        refundReceiver,
+        sig
+      );
+      await tx.wait();
+      await onChanged?.();
+    } catch (e: any) {
+      alert(e?.reason || e?.message || String(e));
     } finally {
       setBusy(false);
     }
@@ -192,7 +283,16 @@ export default function InstallModule({
 
   return (
     <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/40 text-amber-200 text-sm space-y-3">
-      <div className="break-all">Predicted module: {predictedModule}</div>
+      <div className="space-y-1 text-xs text-neutral-300">
+        <div className="flex items-center gap-2">
+          <span className="opacity-70">Factory:</span>
+          <Address addr={factoryAddr} />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="opacity-70">Predicted module:</span>
+          <Address addr={predictedModule} />
+        </div>
+      </div>
 
       {isSafeApp ? (
         <div className="flex flex-col gap-2">
@@ -237,12 +337,11 @@ export default function InstallModule({
                 {busy ? "Working…" : "Enable module"}
               </button>
 
-              {/* Keep Open Safe visible even when instructions are shown */}
               <div className="flex gap-2 items-center">
                 <button
                   className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700"
                   onClick={openSafe}
-                  title="Open your Safe to enable from the UI."
+                  title="Open your Safe to deploy/enable from the UI."
                 >
                   Open Safe UI
                 </button>

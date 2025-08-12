@@ -41,10 +41,17 @@ export default function App() {
     const eth = (window as any).ethereum;
     if (eth) setInjected(new ethers.BrowserProvider(eth));
   }, []);
+  // pick a default chain for public read (use the one you host on)
+  const DEFAULT_CHAIN_ID = 11155111; // Sepolia (adjust if needed)
+  const FALLBACK_RPC = CHAINS[DEFAULT_CHAIN_ID]?.rpcUrls?.[0];
+
   const readProvider = useMemo(() => {
     if (safeEip1193) return new ethers.BrowserProvider(safeEip1193 as any);
     if (injected) return injected;
-    return null; // no provider yet
+    // ✅ public read-only provider so tables/labels still load
+    if (FALLBACK_RPC)
+      return new ethers.JsonRpcProvider(FALLBACK_RPC, DEFAULT_CHAIN_ID);
+    return null;
   }, [safeEip1193, injected]);
 
   // Safe address (autofill if embedded)
@@ -342,6 +349,7 @@ export default function App() {
         </section>
 
         <OwnersView
+          key={`${safeAddr}:${predicted}:${chainId ?? "x"}`}
           safeAddr={safeAddr}
           moduleAddr={predicted}
           readProvider={readProvider as any}
@@ -357,6 +365,7 @@ export default function App() {
 }
 
 /** Owners & heirs table with inline editor and local datetime picker */
+/** Owners & heirs table with inline editor, countdown, and resilient loading */
 function OwnersView({
   safeAddr,
   moduleAddr,
@@ -368,7 +377,7 @@ function OwnersView({
   moduleAddr: string;
   readProvider: ethers.Provider | null;
   enabled?: boolean;
-  chainId: number | null;
+  chainId?: number | null;
 }) {
   const { isSafeApp } = useSafeApp();
 
@@ -379,7 +388,7 @@ function OwnersView({
   const [editing, setEditing] = useState<null | {
     mode: "set" | "prolong";
     owner: string;
-    beneficiary: string; // only used for "set"
+    beneficiary: string; // only for "set"
     dtLocal: string; // YYYY-MM-DDTHH:mm
   }>(null);
   const [nowSec, setNowSec] = useState<number>(Math.floor(Date.now() / 1000));
@@ -398,19 +407,43 @@ function OwnersView({
     )}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
   const localInputToUtcSeconds = (v: string) => {
-    // v like "2025-08-20T14:30" (local time). JS Date treats it as local.
-    const ms = Date.parse(v);
+    const ms = Date.parse(v); // local time parsed as local
     if (!Number.isFinite(ms)) throw new Error("Enter a valid date & time.");
     return Math.floor(ms / 1000);
   };
+  const fmtCountdown = (ts: bigint): { label: string; isFuture: boolean } => {
+    if (ts === 0n) return { label: "—", isFuture: true };
+    const target = Number(ts);
+    const diff = target - nowSec;
+    const future = diff > 0;
+    let d = Math.abs(diff);
+    const days = Math.floor(d / 86400);
+    d -= days * 86400;
+    const hours = Math.floor(d / 3600);
+    d -= hours * 3600;
+    const mins = Math.floor(d / 60);
+    d -= mins * 60;
+    const secs = d;
+    const parts = [
+      days ? `${days}d` : null,
+      hours ? `${hours}h` : null,
+      mins ? `${mins}m` : null,
+      `${secs}s`,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return future
+      ? { label: `in ${parts}`, isFuture: true }
+      : { label: `ready (since ${parts})`, isFuture: false };
+  };
 
-  // tick every second so countdown updates live
+  // Tick every second so countdown updates
   useEffect(() => {
     const t = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // signer
+  // Capture connected EOA (for actions)
   useEffect(() => {
     (async () => {
       try {
@@ -425,35 +458,66 @@ function OwnersView({
     })();
   }, []);
 
-  // load rows
+  // Load rows — owners first, enrich with module configs if code exists
   async function loadRows() {
-    if (
-      !readProvider ||
-      !ethers.isAddress(safeAddr) ||
-      !ethers.isAddress(moduleAddr)
-    ) {
-      setRows([]);
-      return;
+    try {
+      if (!readProvider || !ethers.isAddress(safeAddr)) {
+        setRows([]);
+        return;
+      }
+
+      // 1) Always fetch owners first
+      const owners = await getOwners(readProvider as any, safeAddr);
+      let base: Row[] = owners.map((o) => ({
+        owner: o,
+        beneficiary: ethers.ZeroAddress,
+        ts: 0n,
+      }));
+
+      // 2) Only attempt heirConfigs if module address has code
+      let hasModuleCode = false;
+      if (ethers.isAddress(moduleAddr)) {
+        const code = await (readProvider as any).getCode(moduleAddr);
+        hasModuleCode = !!code && code !== "0x";
+      }
+
+      if (hasModuleCode) {
+        const mod = new ethers.Contract(
+          moduleAddr,
+          HeirSafeModuleABI,
+          readProvider as any
+        );
+        base = await Promise.all(
+          base.map(async (r) => {
+            try {
+              const cfg = await mod.heirConfigs(r.owner);
+              return {
+                owner: r.owner,
+                beneficiary: (cfg.beneficiary as string) || ethers.ZeroAddress,
+                ts: BigInt(cfg.activationTime),
+              };
+            } catch (e) {
+              console.debug("heirConfigs failed for", r.owner, e);
+              return r; // keep owner row even if this call fails
+            }
+          })
+        );
+      }
+
+      setRows(base);
+    } catch (err) {
+      console.error("[OwnersView] loadRows error:", err);
+      // Keep last good rows if something transient fails
     }
-    const owners = await getOwners(readProvider as any, safeAddr);
-    const mod = new ethers.Contract(
-      moduleAddr,
-      HeirSafeModuleABI,
-      readProvider as any
-    );
-    const data = await Promise.all(
-      owners.map(async (o) => {
-        const cfg = await mod.heirConfigs(o);
-        return {
-          owner: o,
-          beneficiary: (cfg.beneficiary as string) || ethers.ZeroAddress,
-          ts: BigInt(cfg.activationTime),
-        };
-      })
-    );
-    setRows(data);
   }
+
+  // Fire load on mount and when deps change, plus poll every 30s
   useEffect(() => {
+    console.log("[OwnersView] effect fired", {
+      safeAddr,
+      moduleAddr,
+      hasProvider: !!readProvider,
+    });
     loadRows();
     const t = setInterval(loadRows, 30000);
     return () => clearInterval(t);
@@ -475,9 +539,9 @@ function OwnersView({
       const signer = await bp.getSigner();
       if ((await signer.getAddress()).toLowerCase() !== owner.toLowerCase())
         throw new Error(`Connect as owner ${owner}`);
-
       if (!ethers.isAddress(beneficiary))
         throw new Error("Invalid beneficiary");
+
       const ts = localInputToUtcSeconds(whenLocal);
       if (ts <= Math.floor(Date.now() / 1000))
         throw new Error("Activation must be in the future");
@@ -520,36 +584,6 @@ function OwnersView({
     }
   }
 
-  // helper to build "in 2d 3h 4m 5s" or "ready (since 1d 2h 3m)"
-  function fmtCountdown(ts: bigint): { label: string; isFuture: boolean } {
-    if (ts === 0n) return { label: "—", isFuture: true };
-    const target = Number(ts);
-    const diff = target - nowSec; // seconds
-    const future = diff > 0;
-    let d = Math.abs(diff);
-
-    const days = Math.floor(d / 86400);
-    d -= days * 86400;
-    const hours = Math.floor(d / 3600);
-    d -= hours * 3600;
-    const mins = Math.floor(d / 60);
-    d -= mins * 60;
-    const secs = d;
-
-    const parts = [
-      days ? `${days}d` : null,
-      hours ? `${hours}h` : null,
-      mins ? `${mins}m` : null,
-      `${secs}s`,
-    ]
-      .filter(Boolean)
-      .join(" ");
-
-    return future
-      ? { label: `in ${parts}`, isFuture: true }
-      : { label: `ready (since ${parts})`, isFuture: false };
-  }
-
   async function doRemove(owner: string) {
     try {
       if (!confirm("Remove beneficiary and activation time?")) return;
@@ -562,7 +596,15 @@ function OwnersView({
         throw new Error(`Connect as owner ${owner}`);
 
       const mod = new ethers.Contract(moduleAddr, HeirSafeModuleABI, signer);
-      const tx = await mod.setBeneficiary(ethers.ZeroAddress, 0);
+
+      // Prefer new removeBeneficiary(), fallback to setBeneficiary(0,0)
+      const fn = mod.interface.getFunction("removeBeneficiary", []);
+      let tx;
+      if (fn) {
+        tx = await mod.removeBeneficiary();
+      } else {
+        tx = await mod.setBeneficiary(ethers.ZeroAddress, 0);
+      }
       await tx.wait();
       await loadRows();
     } catch (e: any) {
@@ -604,6 +646,7 @@ function OwnersView({
             : `Network ${chainId} not supported`}
         </p>
       )}
+
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="text-left text-neutral-300">
@@ -615,242 +658,251 @@ function OwnersView({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
-              const rowBusy = !!busyByOwner[r.owner];
-              const nowSec = BigInt(Math.floor(Date.now() / 1000));
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="p-4 text-sm opacity-70">
+                  No owners found (or failed to load).
+                </td>
+              </tr>
+            ) : (
+              rows.map((r) => {
+                const rowBusy = !!busyByOwner[r.owner];
+                const nowB = BigInt(nowSec);
+                const isOwnerSigner =
+                  signerAddr &&
+                  signerAddr.toLowerCase() === r.owner.toLowerCase();
 
-              const isOwnerSigner =
-                signerAddr &&
-                signerAddr.toLowerCase() === r.owner.toLowerCase();
+                const signerIsBeneficiary =
+                  signerAddr &&
+                  r.beneficiary !== ethers.ZeroAddress &&
+                  signerAddr.toLowerCase() === r.beneficiary.toLowerCase();
 
-              const signerIsBeneficiary =
-                signerAddr &&
-                r.beneficiary !== ethers.ZeroAddress &&
-                signerAddr.toLowerCase() === r.beneficiary.toLowerCase();
+                const claimReady = r.ts !== 0n && nowB >= r.ts;
 
-              const claimReady = r.ts !== 0n && nowSec >= r.ts;
+                const disableRowActions =
+                  !canWriteGlobally || !isOwnerSigner || rowBusy;
 
-              const disableRowActions =
-                !canWriteGlobally || !isOwnerSigner || rowBusy;
+                const disableClaim =
+                  !canWriteGlobally ||
+                  !signerIsBeneficiary ||
+                  !claimReady ||
+                  rowBusy;
 
-              const disableClaim =
-                !canWriteGlobally ||
-                !signerIsBeneficiary ||
-                !claimReady ||
-                rowBusy;
+                const showSet = r.beneficiary === ethers.ZeroAddress;
+                const showProlong = r.beneficiary !== ethers.ZeroAddress;
+                const showRemove = r.beneficiary !== ethers.ZeroAddress;
 
-              const showSet = r.beneficiary === ethers.ZeroAddress;
-              const showProlong = r.beneficiary !== ethers.ZeroAddress;
-              const showRemove = r.beneficiary !== ethers.ZeroAddress;
+                const isEditingRow = editing && editing.owner === r.owner;
 
-              const isEditingRow = editing && editing.owner === r.owner;
-
-              return (
-                <>
-                  <tr
-                    key={r.owner}
-                    className="border-t border-neutral-800 align-top"
-                  >
-                    <td className="py-2 pr-4 break-all">
-                      <Address addr={r.owner} />
-                    </td>
-                    <td className="py-2 pr-4 break-all">
-                      <Address addr={r.beneficiary} />
-                    </td>
-                    <td className="py-2 pr-4">
-                      <div className="flex flex-col">
-                        <span className="text-neutral-200">
-                          {fmtLocal(r.ts)}
-                        </span>
-                        <span className="text-xs opacity-70">
-                          UTC: {fmtUTC(r.ts)}
-                        </span>
-                        {r.ts !== 0n && (
-                          <span
-                            className={`text-xs mt-1 ${
-                              fmtCountdown(r.ts).isFuture
-                                ? "text-neutral-300"
-                                : "text-emerald-300"
-                            }`}
-                          >
-                            {fmtCountdown(r.ts).label}
-                          </span>
+                return (
+                  <>
+                    <tr
+                      key={r.owner}
+                      className="border-t border-neutral-800 align-top"
+                    >
+                      <td className="py-2 pr-4 break-all">
+                        <Address addr={r.owner} variant="ghost" />
+                      </td>
+                      <td className="py-2 pr-4 break-all">
+                        <Address addr={r.beneficiary} />
+                      </td>
+                      <td className="py-2 pr-4">
+                        {r.ts === 0n ? (
+                          <span className="text-neutral-400">—</span>
+                        ) : (
+                          <div className="flex flex-col">
+                            <span className="text-neutral-200">
+                              {fmtLocal(r.ts)}
+                            </span>
+                            <span className="text-xs opacity-70">
+                              UTC: {fmtUTC(r.ts)}
+                            </span>
+                            <span
+                              className={`text-xs mt-1 ${
+                                fmtCountdown(r.ts).isFuture
+                                  ? "text-neutral-300"
+                                  : "text-emerald-300"
+                              }`}
+                            >
+                              {fmtCountdown(r.ts).label}
+                            </span>
+                          </div>
                         )}
-                      </div>
-                    </td>
-                    <td className="py-2">
-                      <div className="flex flex-wrap gap-2">
-                        {showSet && (
-                          <button
-                            className="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
-                            onClick={() =>
-                              setEditing({
-                                mode: "set",
-                                owner: r.owner,
-                                beneficiary: "",
-                                dtLocal: "",
-                              })
-                            }
-                            disabled={disableRowActions}
-                            title={
-                              !enabled
-                                ? "Module must be enabled"
-                                : isSafeApp
-                                ? "Disabled in Safe App"
-                                : !isOwnerSigner
-                                ? "Connect the owner’s wallet"
-                                : undefined
-                            }
-                          >
-                            {rowBusy ? "…" : "Set"}
-                          </button>
-                        )}
-                        {showProlong && (
-                          <button
-                            className="px-2 py-1 rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-50"
-                            onClick={() =>
-                              setEditing({
-                                mode: "prolong",
-                                owner: r.owner,
-                                beneficiary: r.beneficiary,
-                                dtLocal: toLocalInputValue(r.ts) || "",
-                              })
-                            }
-                            disabled={disableRowActions}
-                          >
-                            {rowBusy ? "…" : "Prolong"}
-                          </button>
-                        )}
-                        {showRemove && (
-                          <button
-                            className="px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 disabled:opacity-50"
-                            onClick={() => doRemove(r.owner)}
-                            disabled={disableRowActions}
-                          >
-                            {rowBusy ? "…" : "Remove"}
-                          </button>
-                        )}
-                        {signerIsBeneficiary && (
-                          <button
-                            className="px-2 py-1 rounded bg-amber-700 hover:bg-amber-600 disabled:opacity-50"
-                            onClick={() => doClaim(r.owner)}
-                            disabled={disableClaim}
-                            title={
-                              !enabled
-                                ? "Module must be enabled"
-                                : isSafeApp
-                                ? "Disabled in Safe App"
-                                : !claimReady
-                                ? `Activation at ${fmtUTC(r.ts)}`
-                                : undefined
-                            }
-                          >
-                            {rowBusy
-                              ? "…"
-                              : claimReady
-                              ? "Claim"
-                              : "Claim (not yet)"}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="py-2">
+                        <div className="flex flex-wrap gap-2">
+                          {showSet && (
+                            <button
+                              className="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
+                              onClick={() =>
+                                setEditing({
+                                  mode: "set",
+                                  owner: r.owner,
+                                  beneficiary: "",
+                                  dtLocal: "",
+                                })
+                              }
+                              disabled={disableRowActions}
+                              title={
+                                !enabled
+                                  ? "Module must be enabled"
+                                  : isSafeApp
+                                  ? "Disabled in Safe App"
+                                  : !isOwnerSigner
+                                  ? "Connect the owner’s wallet"
+                                  : undefined
+                              }
+                            >
+                              {rowBusy ? "…" : "Set"}
+                            </button>
+                          )}
+                          {showProlong && (
+                            <button
+                              className="px-2 py-1 rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-50"
+                              onClick={() =>
+                                setEditing({
+                                  mode: "prolong",
+                                  owner: r.owner,
+                                  beneficiary: r.beneficiary,
+                                  dtLocal: toLocalInputValue(r.ts) || "",
+                                })
+                              }
+                              disabled={disableRowActions}
+                            >
+                              {rowBusy ? "…" : "Prolong"}
+                            </button>
+                          )}
+                          {showRemove && (
+                            <button
+                              className="px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 disabled:opacity-50"
+                              onClick={() => doRemove(r.owner)}
+                              disabled={disableRowActions}
+                            >
+                              {rowBusy ? "…" : "Remove"}
+                            </button>
+                          )}
+                          {signerIsBeneficiary && (
+                            <button
+                              className="px-2 py-1 rounded bg-amber-700 hover:bg-amber-600 disabled:opacity-50"
+                              onClick={() => doClaim(r.owner)}
+                              disabled={disableClaim}
+                              title={
+                                !enabled
+                                  ? "Module must be enabled"
+                                  : isSafeApp
+                                  ? "Disabled in Safe App"
+                                  : !claimReady
+                                  ? `Activation at ${fmtUTC(r.ts)}`
+                                  : undefined
+                              }
+                            >
+                              {rowBusy
+                                ? "…"
+                                : claimReady
+                                ? "Claim"
+                                : "Claim (not yet)"}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
 
-                  {isEditingRow && (
-                    <tr className="border-t border-neutral-800">
-                      <td colSpan={4} className="py-3">
-                        <div className="flex flex-wrap gap-3 items-end">
-                          {editing.mode === "set" && (
+                    {isEditingRow && (
+                      <tr className="border-t border-neutral-800">
+                        <td colSpan={4} className="py-3">
+                          <div className="flex flex-wrap gap-3 items-end">
+                            {editing.mode === "set" && (
+                              <div className="flex flex-col gap-1">
+                                <label className="text-xs opacity-70">
+                                  Beneficiary
+                                </label>
+                                <input
+                                  className="px-3 py-2 rounded bg-neutral-800 min-w-[24rem]"
+                                  placeholder="0x… beneficiary"
+                                  value={editing.beneficiary}
+                                  onChange={(e) =>
+                                    setEditing(
+                                      (st) =>
+                                        st && {
+                                          ...st,
+                                          beneficiary: e.target.value,
+                                        }
+                                    )
+                                  }
+                                />
+                              </div>
+                            )}
                             <div className="flex flex-col gap-1">
                               <label className="text-xs opacity-70">
-                                Beneficiary
+                                Activation (local)
                               </label>
                               <input
-                                className="px-3 py-2 rounded bg-neutral-800 min-w-[24rem]"
-                                placeholder="0x… beneficiary"
-                                value={editing.beneficiary}
+                                type="datetime-local"
+                                className="px-3 py-2 rounded bg-neutral-800"
+                                value={editing.dtLocal}
                                 onChange={(e) =>
                                   setEditing(
                                     (st) =>
-                                      st && {
-                                        ...st,
-                                        beneficiary: e.target.value,
-                                      }
+                                      st && { ...st, dtLocal: e.target.value }
                                   )
                                 }
                               />
                             </div>
-                          )}
-                          <div className="flex flex-col gap-1">
-                            <label className="text-xs opacity-70">
-                              Activation (local)
-                            </label>
-                            <input
-                              type="datetime-local"
-                              className="px-3 py-2 rounded bg-neutral-800"
-                              value={editing.dtLocal}
-                              onChange={(e) =>
-                                setEditing(
-                                  (st) =>
-                                    st && { ...st, dtLocal: e.target.value }
-                                )
-                              }
-                            />
-                          </div>
-                          <div className="flex gap-2">
-                            {editing.mode === "set" ? (
+                            <div className="flex gap-2">
+                              {editing.mode === "set" ? (
+                                <button
+                                  className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
+                                  onClick={() =>
+                                    doSet(
+                                      editing.owner,
+                                      editing.beneficiary,
+                                      editing.dtLocal
+                                    )
+                                  }
+                                  disabled={
+                                    !canWriteGlobally ||
+                                    !signerAddr ||
+                                    signerAddr.toLowerCase() !==
+                                      editing.owner.toLowerCase() ||
+                                    !editing.dtLocal ||
+                                    (editing.mode === "set" &&
+                                      !ethers.isAddress(editing.beneficiary))
+                                  }
+                                >
+                                  Save
+                                </button>
+                              ) : (
+                                <button
+                                  className="px-3 py-2 rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-50"
+                                  onClick={() =>
+                                    doProlong(editing.owner, editing.dtLocal)
+                                  }
+                                  disabled={
+                                    !canWriteGlobally ||
+                                    !signerAddr ||
+                                    signerAddr.toLowerCase() !==
+                                      editing.owner.toLowerCase() ||
+                                    !editing.dtLocal
+                                  }
+                                >
+                                  Save
+                                </button>
+                              )}
                               <button
-                                className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
-                                onClick={() =>
-                                  doSet(
-                                    editing.owner,
-                                    editing.beneficiary,
-                                    editing.dtLocal
-                                  )
-                                }
-                                disabled={
-                                  !canWriteGlobally ||
-                                  !signerAddr ||
-                                  signerAddr.toLowerCase() !==
-                                    editing.owner.toLowerCase() ||
-                                  !editing.dtLocal ||
-                                  (editing.mode === "set" &&
-                                    !ethers.isAddress(editing.beneficiary))
-                                }
+                                className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700"
+                                onClick={() => setEditing(null)}
                               >
-                                Save
+                                Cancel
                               </button>
-                            ) : (
-                              <button
-                                className="px-3 py-2 rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-50"
-                                onClick={() =>
-                                  doProlong(editing.owner, editing.dtLocal)
-                                }
-                                disabled={
-                                  !canWriteGlobally ||
-                                  !signerAddr ||
-                                  signerAddr.toLowerCase() !==
-                                    editing.owner.toLowerCase() ||
-                                  !editing.dtLocal
-                                }
-                              >
-                                Save
-                              </button>
-                            )}
-                            <button
-                              className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700"
-                              onClick={() => setEditing(null)}
-                            >
-                              Cancel
-                            </button>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </>
-              );
-            })}
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>

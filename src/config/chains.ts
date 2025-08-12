@@ -19,7 +19,7 @@ export const CHAINS: Record<number, ChainConfig> = {
   11155111: {
     id: 11155111,
     name: "Sepolia (test)",
-    factory: "0xC20bB5836A8ef3f8b7b39211a4521C6D89EbAd78",
+    factory: "0xE83e2d2abE267741c261f7749A97BA4CE2A63603",
     txService: "https://safe-transaction-sepolia.safe.global",
     addChainParams: {
       chainId: "0xaa36a7",
