@@ -12,7 +12,7 @@ type Props = {
   moduleAddr: string;
   readProvider: ethers.Provider | null;
   enabled?: boolean;
-  chainId?: number | null;
+  chainId?: number | null; // not used here; kept for prop-compat
 };
 
 /** Tiny toast system (local to this component) */
@@ -27,10 +27,6 @@ function useToasts() {
   return { toasts: list, push };
 }
 
-/** Owners & heirs table with timestamps (Local → Countdown / Syncing… / Available → UTC).
- *  Countdown uses local time only. After local time passes the activation, we poll the chain
- *  every 5s and switch to "Available" once a block timestamp ≥ activation.
- */
 export default function OwnersView({
   safeAddr,
   moduleAddr,
@@ -187,6 +183,7 @@ export default function OwnersView({
         base = await Promise.all(
           base.map(async (r) => {
             try {
+              // ← this is the important bit: read the current config
               const cfg = await mod.heirConfigs(r.owner);
               return {
                 owner: r.owner,
@@ -207,7 +204,7 @@ export default function OwnersView({
     }
   }
 
-  // Initial load & when deps change (no block-driven reloads)
+  // Initial load & when deps change
   useEffect(() => {
     loadRows();
   }, [safeAddr, moduleAddr, readProvider]);
@@ -216,10 +213,7 @@ export default function OwnersView({
   const needsSync = useMemo(
     () =>
       rows.some(
-        (r) =>
-          r.ts !== 0n &&
-          nowSec >= Number(r.ts) &&
-          chainTs < Number(r.ts)
+        (r) => r.ts !== 0n && nowSec >= Number(r.ts) && chainTs < Number(r.ts)
       ),
     [rows, nowSec, chainTs]
   );
@@ -230,8 +224,12 @@ export default function OwnersView({
     let stop = false;
 
     // quick kick + slow poll
-    (async () => { await refreshChainTs(); })();
-    const id = setInterval(() => { if (!stop) refreshChainTs(); }, 5000);
+    (async () => {
+      await refreshChainTs();
+    })();
+    const id = setInterval(() => {
+      if (!stop) refreshChainTs();
+    }, 5000);
 
     return () => {
       stop = true;
@@ -377,10 +375,7 @@ export default function OwnersView({
     }
   }
 
-  const moduleInfo = useMemo(() => {
-    const hasAddr = ethers.isAddress(moduleAddr);
-    return { hasAddr, enabled: Boolean(enabled) };
-  }, [moduleAddr, enabled]);
+  const hasModuleAddr = ethers.isAddress(moduleAddr);
 
   return (
     <section
@@ -402,13 +397,9 @@ export default function OwnersView({
         </label>
       </div>
 
-      {!moduleInfo.hasAddr && (
-        <div className="text-sm text-amber-300">
-          Predicted module address is empty — select a Safe and refresh.
-        </div>
-      )}
+      {/* IMPORTANT: no “Safe verified …” badges here anymore */}
 
-      {moduleInfo.hasAddr && enabled === false && (
+      {hasModuleAddr && enabled === false && (
         <div className="text-sm text-amber-300">
           Module is deployed but not enabled on this Safe. Actions are disabled.
         </div>
@@ -438,8 +429,7 @@ export default function OwnersView({
                 const rowBusy = !!busyByOwner[r.owner?.toLowerCase?.() ?? r.owner];
 
                 const isOwnerSigner =
-                  signerAddr &&
-                  signerAddr.toLowerCase() === r.owner.toLowerCase();
+                  signerAddr && signerAddr.toLowerCase() === r.owner.toLowerCase();
 
                 const signerIsBeneficiary =
                   signerAddr &&
@@ -594,11 +584,14 @@ export default function OwnersView({
                                   placeholder="0x… beneficiary"
                                   value={editing.beneficiary}
                                   onChange={(e) =>
-                                    setEditing((st) => st && { ...st, beneficiary: e.target.value })
+                                    setEditing((st) =>
+                                      st && { ...st, beneficiary: e.target.value.trim() }
+                                    )
                                   }
                                 />
                               </div>
                             )}
+
                             <div className="flex flex-col gap-1">
                               <label className="text-xs opacity-70">Activation (local)</label>
                               <input
@@ -606,42 +599,32 @@ export default function OwnersView({
                                 className="px-3 py-2 rounded bg-neutral-800"
                                 value={editing.dtLocal}
                                 onChange={(e) =>
-                                  setEditing((st) => st && { ...st, dtLocal: e.target.value })
+                                  setEditing((st) =>
+                                    st && { ...st, dtLocal: e.target.value }
+                                  )
                                 }
                               />
                             </div>
+
                             <div className="flex gap-2">
                               {editing.mode === "set" ? (
                                 <button
-                                  className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50"
+                                  className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600"
                                   onClick={() =>
                                     doSet(editing.owner, editing.beneficiary, editing.dtLocal)
-                                  }
-                                  disabled={
-                                    !canWriteGlobally ||
-                                    !signerAddr ||
-                                    signerAddr.toLowerCase() !== editing.owner.toLowerCase() ||
-                                    !editing.dtLocal ||
-                                    (editing.mode === "set" &&
-                                      !ethers.isAddress(editing.beneficiary))
                                   }
                                 >
                                   Save
                                 </button>
                               ) : (
                                 <button
-                                  className="px-3 py-2 rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-50"
+                                  className="px-3 py-2 rounded bg-sky-700 hover:bg-sky-600"
                                   onClick={() => doProlong(editing.owner, editing.dtLocal)}
-                                  disabled={
-                                    !canWriteGlobally ||
-                                    !signerAddr ||
-                                    signerAddr.toLowerCase() !== editing.owner.toLowerCase() ||
-                                    !editing.dtLocal
-                                  }
                                 >
                                   Save
                                 </button>
                               )}
+
                               <button
                                 className="px-3 py-2 rounded bg-neutral-800 hover:bg-neutral-700"
                                 onClick={() => setEditing(null)}
@@ -661,52 +644,43 @@ export default function OwnersView({
         </table>
       </div>
 
-      {/* Toast stack */}
-      <div className="fixed bottom-4 right-4 z-50 space-y-2">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={[
-              "px-3 py-2 rounded-md shadow border text-sm",
-              t.kind === "success" && "bg-emerald-900/30 border-emerald-700 text-emerald-200",
-              t.kind === "error" && "bg-rose-900/30 border-rose-700 text-rose-200",
-              t.kind === "info" && "bg-neutral-900/70 border-neutral-700 text-neutral-200",
-            ].filter(Boolean).join(" ")}
-          >
-            {t.msg}
-          </div>
-        ))}
-      </div>
+      {/* local toasts */}
+      {!!toasts.length && (
+        <div className="fixed bottom-4 right-4 space-y-2 z-50">
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              className={`px-3 py-2 rounded shadow border text-sm ${
+                t.kind === "error"
+                  ? "bg-rose-900/60 border-rose-800 text-rose-100"
+                  : t.kind === "success"
+                  ? "bg-emerald-900/60 border-emerald-800 text-emerald-100"
+                  : "bg-neutral-900/60 border-neutral-800 text-neutral-100"
+              }`}
+            >
+              {t.msg}
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
 
-/** Badges */
-
+/** Small badges for activation cell */
 function SyncBadge() {
   return (
-    <div
-      className="inline-flex items-center gap-2 px-2 py-1 rounded-md border border-neutral-700 bg-neutral-800/60 text-neutral-200 text-xs"
-      title="Waiting for the network time to pass activation"
-      aria-label="Synchronizing"
-    >
-      <span className="relative flex h-3 w-3">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neutral-400 opacity-30" />
-        <span className="relative inline-flex rounded-full h-3 w-3 bg-neutral-300" />
-      </span>
+    <span className="inline-flex items-center gap-2 px-2 py-0.5 rounded bg-neutral-800 text-[11px]">
+      <span className="inline-block h-1.5 w-1.5 rounded-full bg-neutral-400 animate-pulse" />
       Synchronizing…
-    </div>
+    </span>
   );
 }
-
 function AvailableBadge() {
   return (
-    <div
-      className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-emerald-700 bg-emerald-900/20 text-emerald-300 text-xs"
-      aria-label="Available"
-    >
-      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+    <span className="inline-flex items-center gap-2 px-2 py-0.5 rounded bg-emerald-900/60 text-[11px]">
+      <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
       Available
-    </div>
+    </span>
   );
 }
