@@ -64,8 +64,6 @@ type SafeCheck =
 
 export default function App() {
   // Stable “scope” guard to drop late async results after a chain switch.
-  // NOTE: these callbacks are stable (useCallback with empty deps), so they
-  // must NOT be included in effect dependency arrays.
   const scopeRef = useRef(0);
   const bumpScope = useCallback(() => ++scopeRef.current, []);
   const getScope = useCallback(() => scopeRef.current, []);
@@ -121,7 +119,7 @@ export default function App() {
       }
     })();
     return cleanup;
-  }, [readProvider, safeEip1193, bumpScope]); // DO NOT add getScope here
+  }, [readProvider, safeEip1193, bumpScope]); // keep deps stable
 
   // Also clear on any chainId change (covers Safe iframe & fallback)
   useEffect(() => {
@@ -397,9 +395,10 @@ export default function App() {
             </div>
           )}
 
-          {/* Install UI only if Safe is valid on this network */}
+          {/* Install UI only if Safe is valid AND check finished AND not enabled */}
           {safeCheck.status === "ok" &&
-            !enabled &&
+            enabled === false &&               // ← precise false, not null
+            deployed !== null &&               // ← wait until status known
             readProvider &&
             ethers.isAddress(safeAddr) &&
             normalizedFactory &&
@@ -419,7 +418,8 @@ export default function App() {
               />
             )}
 
-          {safeCheck.status === "ok" && predicted && (
+          {/* Only show predicted line after status is known to avoid flicker */}
+          {safeCheck.status === "ok" && deployed !== null && predicted && (
             <div className="text-xs opacity-70 break-all flex items-center gap-2">
               <span>Predicted module:</span>
               <Address addr={predicted} />
