@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "dotenv -e .env -- sh -c 'npm run build && scp -rC dist/* \"$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH\"'"
+    "deploy:upload": "dotenv -e .env -- sh -c 'npm run build && scp -rC dist/* \"$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH\"'",
+    "deploy": "node scripts/release.mjs"
   },
   "dependencies": {
     "@safe-global/safe-apps-provider": "^0.18.6",

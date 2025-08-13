@@ -1,3 +1,6 @@
+// src/components/AppFooter.tsx
+import APP_VERSION from "../version";
+
 export default function AppFooter({
   showAiCredit = false, // flip to true if you want to credit the AI helper
 }: {
@@ -28,8 +31,8 @@ export default function AppFooter({
           )}
         </div>
 
-        {/* Right: repo links */}
-        <nav className="flex flex-wrap gap-2">
+        {/* Right: repo links + version */}
+        <nav className="flex flex-wrap items-center gap-2">
           <a
             href="https://github.com/AlexNa-Holdings/heirsafe-module"
             target="_blank"
@@ -48,6 +51,14 @@ export default function AppFooter({
           >
             GitHub: heirsafe-ui
           </a>
+
+          {/* Version chip */}
+          <span
+            className="ml-1 px-2 py-1 rounded border border-neutral-800 bg-neutral-900/60 text-xs text-neutral-300"
+            title="Application version"
+          >
+            v{APP_VERSION}
+          </span>
         </nav>
       </div>
     </footer>
